@@ -1,0 +1,137 @@
+# ===========================================
+# 공항 위험지수 시스템 .gitignore
+# ===========================================
+
+# -------------------------------------------
+# 환경변수 및 시크릿
+# -------------------------------------------
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets/
+
+# -------------------------------------------
+# Python
+# -------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# -------------------------------------------
+# Node.js / Frontend
+# -------------------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build output
+frontend/dist/
+frontend/build/
+.next/
+out/
+
+# -------------------------------------------
+# IDE / Editor
+# -------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# -------------------------------------------
+# OS
+# -------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# -------------------------------------------
+# Docker
+# -------------------------------------------
+# Docker volumes (로컬 개발용)
+docker-data/
+
+# -------------------------------------------
+# 로그
+# -------------------------------------------
+*.log
+logs/
+log/
+
+# -------------------------------------------
+# 데이터베이스
+# -------------------------------------------
+*.sqlite3
+*.db
+
+# -------------------------------------------
+# 테스트
+# -------------------------------------------
+coverage/
+.nyc_output/
+
+# -------------------------------------------
+# 기타
+# -------------------------------------------
+*.bak
+*.tmp
+*.temp
+.cache/
+tmp/
+temp/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Jupyter
+.ipynb_checkpoints/
