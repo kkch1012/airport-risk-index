@@ -1,0 +1,86 @@
+import axios from 'axios';
+import type { DashboardData, AirportRiskDetail, Airport, TrendData, CorrelationData } from '@/types';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// 대시보드 데이터 조회
+export const fetchDashboard = async (): Promise<DashboardData> => {
+  const { data } = await api.get('/risks/dashboard');
+  return data;
+};
+
+// 공항 목록 조회
+export const fetchAirports = async (region?: string): Promise<{ total: number; airports: Airport[] }> => {
+  const { data } = await api.get('/airports', { params: { region } });
+  return data;
+};
+
+// 공항 상세 위험지수 조회
+export const fetchAirportRisk = async (airportCode: string, date?: string): Promise<AirportRiskDetail> => {
+  const { data } = await api.get(`/risks/airports/${airportCode}`, {
+    params: { target_date: date },
+  });
+  return data;
+};
+
+// 위험지수 이력 조회
+export const fetchRiskHistory = async (
+  airportCode: string,
+  startDate: string,
+  endDate: string
+): Promise<{ history: { date: string; total_score: number }[] }> => {
+  const { data } = await api.get(`/risks/airports/${airportCode}/history`, {
+    params: { start_date: startDate, end_date: endDate },
+  });
+  return data;
+};
+
+// 공항 비교
+export const fetchComparison = async (airportCodes: string[]): Promise<{
+  date: string;
+  comparison: { code: string; name: string; total_score: number; categories: Record<string, number> }[];
+}> => {
+  const { data } = await api.get('/risks/comparison', {
+    params: { airport_codes: airportCodes },
+    paramsSerializer: (params) => {
+      return params.airport_codes.map((c: string) => `airport_codes=${c}`).join('&');
+    },
+  });
+  return data;
+};
+
+// 트렌드 분석
+export const fetchTrends = async (
+  airportCode?: string,
+  category?: string,
+  period?: string
+): Promise<TrendData> => {
+  const { data } = await api.get('/analytics/trends', {
+    params: { airport_code: airportCode, category, period },
+  });
+  return data;
+};
+
+// 상관분석 결과
+export const fetchCorrelations = async (): Promise<CorrelationData> => {
+  const { data } = await api.get('/analytics/correlations');
+  return data;
+};
+
+// 가중치 조회
+export const fetchWeights = async (): Promise<{
+  category_weights: Record<string, number>;
+  factor_weights: Record<string, Record<string, number>>;
+}> => {
+  const { data } = await api.get('/analytics/weights');
+  return data;
+};
+
+export default api;
