@@ -9,14 +9,12 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.api.v1.router import api_router
-from app.core.database import init_db
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """애플리케이션 시작/종료 이벤트 핸들러"""
-    # 시작 시
-    await init_db()
+    # 시작 시 (DB 연결은 추후 구현)
     yield
     # 종료 시
     pass
