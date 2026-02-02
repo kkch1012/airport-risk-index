@@ -12,6 +12,22 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# 공항별 국제 노선 취항 국가 (여행경보 연동용)
+# 실제로는 더 많은 노선이 있지만, 주요 노선만 포함
+AIRPORT_INTERNATIONAL_ROUTES = {
+    "ICN": ["JP", "CN", "US", "TH", "VN", "TW", "PH", "SG", "HK", "DE", "FR", "GB", "AU", "ID", "MY"],  # 인천: 대부분의 국제선
+    "GMP": ["JP", "CN", "TW"],  # 김포: 일본, 중국, 대만
+    "PUS": ["JP", "CN", "TW", "VN", "TH", "PH"],  # 김해: 동아시아, 동남아
+    "CJU": ["JP", "CN", "TW", "HK", "MO"],  # 제주: 일본, 중국, 대만, 홍콩, 마카오
+    "TAE": ["JP", "CN", "TW", "VN", "TH"],  # 대구: 일본, 중국 등
+    "CJJ": ["JP", "CN", "TW", "VN", "TH", "PH"],  # 청주: 일본, 중국, 동남아
+    "MWX": ["JP", "CN", "TW", "VN", "TH"],  # 무안: 일본, 중국, 동남아
+    "YNY": ["JP", "CN", "TW"],  # 양양: 일본, 중국, 대만
+    # 나머지 국내선 전용 공항은 국제선 없음
+    "KWJ": [], "RSU": [], "USN": [], "KPO": [], "WJU": [], "HIN": [], "KUV": [],
+}
+
+
 @dataclass
 class CategoryScore:
     """카테고리별 위험 점수"""
@@ -150,6 +166,91 @@ class RiskCalculator:
             factors=factors
         )
 
+    def calculate_external_score(
+        self,
+        airport_code: str,
+        travel_advisory_data: List[Dict[str, Any]]
+    ) -> CategoryScore:
+        """
+        외부요인 위험 점수 계산 (여행경보 기반)
+
+        Args:
+            airport_code: 공항 코드
+            travel_advisory_data: 여행경보 데이터 리스트
+
+        Returns:
+            CategoryScore: 외부요인 위험 점수
+        """
+        factors = {
+            "travel_advisory": 0.0,
+            "geopolitical": 0.0,  # 추후 국제정세 데이터 연동
+        }
+
+        # 해당 공항의 국제 노선 취항 국가 조회
+        route_countries = AIRPORT_INTERNATIONAL_ROUTES.get(airport_code, [])
+
+        if not route_countries or not travel_advisory_data:
+            # 국제선이 없는 공항이면 외부요인 위험 낮음
+            return CategoryScore(
+                code="external",
+                name="외부요인",
+                score=5.0,
+                level="LOW",
+                factors=factors
+            )
+
+        # 취항 국가별 여행경보 점수 계산
+        country_scores = []
+        high_risk_countries = []
+
+        # 여행경보 데이터를 국가 코드로 인덱싱
+        advisory_map = {d["country_code"]: d for d in travel_advisory_data}
+
+        for country_code in route_countries:
+            advisory = advisory_map.get(country_code)
+            if advisory:
+                score = advisory.get("risk_score", 0)
+                country_scores.append(score)
+
+                if score >= 40:  # 여행자제 이상
+                    high_risk_countries.append({
+                        "code": country_code,
+                        "name": advisory.get("country_name", country_code),
+                        "level": advisory.get("alarm_name", ""),
+                        "score": score,
+                    })
+            else:
+                country_scores.append(0)  # 경보 없음
+
+        # 여행경보 점수: 가중 평균 (고위험 국가에 가중치)
+        if country_scores:
+            # 최대값과 평균의 조합
+            max_score = max(country_scores)
+            avg_score = sum(country_scores) / len(country_scores)
+            # 최대값 70%, 평균 30% 반영
+            travel_advisory_score = max_score * 0.7 + avg_score * 0.3
+        else:
+            travel_advisory_score = 0
+
+        factors["travel_advisory"] = round(travel_advisory_score, 1)
+
+        # 국제정세 점수는 추후 연동 (현재 여행경보 기반 추정)
+        # 여행경보 3단계 이상 국가가 있으면 국제정세 위험 증가
+        if any(s >= 70 for s in country_scores):
+            factors["geopolitical"] = round(travel_advisory_score * 0.5, 1)
+
+        # 최종 점수: 여행경보 80%, 국제정세 20%
+        final_score = factors["travel_advisory"] * 0.8 + factors["geopolitical"] * 0.2
+        final_score = min(100, max(0, final_score))
+
+        return CategoryScore(
+            code="external",
+            name="외부요인",
+            score=round(final_score, 2),
+            level=self._get_risk_level(final_score),
+            factors=factors
+        )
+
     def calculate_mock_category_score(
         self,
         category_code: str,
@@ -208,6 +309,7 @@ class RiskCalculator:
         airport_code: str,
         airport_name: str,
         weather_data: Optional[Dict[str, Any]] = None,
+        travel_advisory_data: Optional[List[Dict[str, Any]]] = None,
     ) -> RiskResult:
         """
         종합 위험지수 계산
@@ -216,6 +318,7 @@ class RiskCalculator:
             airport_code: 공항 코드
             airport_name: 공항 이름
             weather_data: 기상 데이터 (없으면 목업 사용)
+            travel_advisory_data: 여행경보 데이터 (없으면 목업 사용)
 
         Returns:
             RiskResult: 종합 위험지수 결과
@@ -231,13 +334,22 @@ class RiskCalculator:
                 "weather", "기상위험", seed
             )
 
-        # 2. 기타 카테고리 (현재 목업, 추후 실제 데이터로 대체)
+        # 2. 외부요인 (여행경보 데이터 또는 목업)
+        if travel_advisory_data:
+            categories["external"] = self.calculate_external_score(
+                airport_code, travel_advisory_data
+            )
+        else:
+            categories["external"] = self.calculate_mock_category_score(
+                "external", "외부요인", seed
+            )
+
+        # 3. 기타 카테고리 (현재 목업, 추후 실제 데이터로 대체)
         category_names = {
             "aviation": "항공안전",
             "security": "보안위협",
             "health": "보건위험",
             "operational": "운영위험",
-            "external": "외부요인",
         }
 
         for code, name in category_names.items():

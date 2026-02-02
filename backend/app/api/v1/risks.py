@@ -7,6 +7,7 @@ from typing import List, Optional
 from datetime import date, datetime
 
 from app.collectors.weather import WeatherCollector
+from app.collectors.travel_advisory import TravelAdvisoryCollector
 from app.services.risk_calculator import RiskCalculator
 
 router = APIRouter()
@@ -38,6 +39,18 @@ async def get_weather_data_map() -> dict:
     return weather_map
 
 
+async def get_travel_advisory_data() -> tuple[list, bool]:
+    """여행경보 데이터 수집 및 반환"""
+    async with TravelAdvisoryCollector() as collector:
+        result = await collector.run()
+
+    if result["status"] != "success":
+        return [], False
+
+    is_real_data = bool(collector.api_key)
+    return result["data"], is_real_data
+
+
 @router.get("/dashboard")
 async def get_dashboard():
     """대시보드 전체 현황"""
@@ -45,6 +58,9 @@ async def get_dashboard():
 
     # 실제 기상 데이터 수집
     weather_map = await get_weather_data_map()
+
+    # 여행경보 데이터 수집
+    travel_advisory_data, is_advisory_real = await get_travel_advisory_data()
 
     airport_data = []
     for code, name in AIRPORT_NAMES.items():
@@ -55,7 +71,8 @@ async def get_dashboard():
         risk_result = calculator.calculate_total_risk(
             airport_code=code,
             airport_name=name,
-            weather_data=weather_data
+            weather_data=weather_data,
+            travel_advisory_data=travel_advisory_data
         )
 
         airport_data.append({
@@ -64,6 +81,7 @@ async def get_dashboard():
             "score": risk_result.total_score,
             "level": risk_result.risk_level,
             "weather_score": risk_result.categories["weather"].score,
+            "external_score": risk_result.categories["external"].score,
         })
 
     # 점수순 정렬 (높은 순)
@@ -73,8 +91,10 @@ async def get_dashboard():
     high_risk_count = sum(1 for a in airport_data if a["level"] in ["HIGH", "CRITICAL"])
     avg_score = sum(a["score"] for a in airport_data) / len(airport_data)
 
-    # 기상 관련 알림 생성
+    # 알림 생성 (기상 + 여행경보)
     alerts = []
+
+    # 기상 관련 알림
     for airport in airport_data:
         if airport["weather_score"] >= 50:
             alerts.append({
@@ -83,6 +103,19 @@ async def get_dashboard():
                 "message": f"기상 위험지수 높음 ({airport['weather_score']:.1f})",
                 "severity": "WARNING" if airport["weather_score"] < 70 else "CRITICAL"
             })
+
+    # 여행경보 관련 알림
+    high_risk_advisories = [
+        d for d in travel_advisory_data
+        if d.get("alarm_level", 0) >= 3
+    ]
+    for advisory in high_risk_advisories[:3]:  # 최대 3개
+        alerts.append({
+            "airport": "국제선",
+            "type": "SECURITY",
+            "message": f"{advisory['country_name']} {advisory['alarm_name']}",
+            "severity": "CRITICAL" if advisory.get("alarm_level", 0) >= 4 else "WARNING"
+        })
 
     return {
         "summary": {
@@ -93,6 +126,10 @@ async def get_dashboard():
         },
         "airports": airport_data,
         "alerts": alerts[:5],  # 최대 5개
+        "data_sources": {
+            "weather": "실제 데이터" if weather_map else "목업 데이터",
+            "travel_advisory": "실제 데이터" if is_advisory_real else "목업 데이터",
+        }
     }
 
 
@@ -113,11 +150,15 @@ async def get_airport_risk(
     weather_map = await get_weather_data_map()
     weather_data = weather_map.get(airport_code)
 
+    # 여행경보 데이터 수집
+    travel_advisory_data, is_advisory_real = await get_travel_advisory_data()
+
     # 위험지수 계산
     risk_result = calculator.calculate_total_risk(
         airport_code=airport_code,
         airport_name=AIRPORT_NAMES[airport_code],
-        weather_data=weather_data
+        weather_data=weather_data,
+        travel_advisory_data=travel_advisory_data
     )
 
     # 카테고리 데이터를 딕셔너리로 변환
@@ -142,6 +183,7 @@ async def get_airport_risk(
         "updated_at": risk_result.updated_at,
         "data_source": {
             "weather": "실제 데이터" if weather_data else "목업 데이터",
+            "travel_advisory": "실제 데이터" if is_advisory_real else "목업 데이터",
             "others": "목업 데이터 (추후 연동 예정)",
         }
     }
@@ -193,6 +235,7 @@ async def compare_airports(
     """공항 간 비교"""
     calculator = RiskCalculator()
     weather_map = await get_weather_data_map()
+    travel_advisory_data, _ = await get_travel_advisory_data()
 
     comparison = []
     for code in airport_codes:
@@ -204,7 +247,8 @@ async def compare_airports(
         risk_result = calculator.calculate_total_risk(
             airport_code=code,
             airport_name=AIRPORT_NAMES[code],
-            weather_data=weather_data
+            weather_data=weather_data,
+            travel_advisory_data=travel_advisory_data
         )
 
         comparison.append({
@@ -220,4 +264,24 @@ async def compare_airports(
     return {
         "date": date.today().isoformat(),
         "comparison": comparison,
+    }
+
+
+@router.get("/travel-advisory")
+async def get_travel_advisory():
+    """여행경보 현황 조회"""
+    async with TravelAdvisoryCollector() as collector:
+        result = await collector.run()
+
+    if result["status"] != "success":
+        raise HTTPException(status_code=500, detail="여행경보 데이터 수집 실패")
+
+    # 요약 통계 생성
+    summary = collector.get_summary(result["data"])
+
+    return {
+        "updated_at": datetime.now().isoformat(),
+        "data_source": "실제 데이터" if collector.api_key else "목업 데이터",
+        "summary": summary,
+        "countries": result["data"],
     }
