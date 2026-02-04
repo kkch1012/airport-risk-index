@@ -12,6 +12,27 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# 질병별 위험도 점수 (보건위험 계산용)
+DISEASE_RISK_SCORES = {
+    "EBOLA": 95,
+    "MARBURG": 95,
+    "PLAGUE": 90,
+    "LASSAFEVER": 90,
+    "MERS": 85,
+    "YELLOWFEVER": 80,
+    "POLIOVIRUS": 80,
+    "AVIANFLU": 75,
+    "CHOLERA": 70,
+    "MPOX": 60,
+    "ZIKA": 60,
+    "DENGUE": 55,
+    "CHIKUNGUNYA": 55,
+    "COVID19": 50,
+    "MALARIA": 50,
+    "UNKNOWN": 40,
+}
+
+
 # 공항별 국제 노선 취항 국가 (여행경보 연동용)
 # 실제로는 더 많은 노선이 있지만, 주요 노선만 포함
 AIRPORT_INTERNATIONAL_ROUTES = {
@@ -251,6 +272,265 @@ class RiskCalculator:
             factors=factors
         )
 
+    def calculate_health_score(
+        self,
+        airport_code: str,
+        health_data: List[Dict[str, Any]]
+    ) -> CategoryScore:
+        """
+        보건위험 점수 계산 (검역관리지역 데이터 기반)
+
+        Args:
+            airport_code: 공항 코드
+            health_data: 검역관리지역 데이터 리스트
+
+        Returns:
+            CategoryScore: 보건위험 점수
+        """
+        factors = {
+            "disease_alert": 0.0,      # 감염병 경보 수준
+            "quarantine_cases": 0.0,    # 검역관리지역 수
+            "outbreak_proximity": 0.0,  # 발생지 근접도
+        }
+
+        # 해당 공항의 국제 노선 취항 국가
+        route_countries = AIRPORT_INTERNATIONAL_ROUTES.get(airport_code, [])
+
+        if not route_countries or not health_data:
+            # 국제선이 없는 공항이면 보건위험 낮음
+            return CategoryScore(
+                code="health",
+                name="보건위험",
+                score=5.0,
+                level="LOW",
+                factors=factors
+            )
+
+        # 국가별 위험도 맵 구축 (여러 질병이 있을 수 있으므로 최대값 사용)
+        country_risk_map = {}
+        country_disease_count = {}
+
+        for item in health_data:
+            country_code = item.get("country_code", "")
+            if not country_code:
+                continue
+
+            disease_code = item.get("disease_code", "UNKNOWN")
+            risk_score = item.get("risk_score", 0)
+
+            # 질병 코드 기반 위험도가 없으면 기본값 사용
+            if risk_score == 0:
+                risk_score = DISEASE_RISK_SCORES.get(disease_code, 40)
+
+            # 국가별 최대 위험도
+            if country_code not in country_risk_map:
+                country_risk_map[country_code] = 0
+                country_disease_count[country_code] = 0
+
+            country_risk_map[country_code] = max(
+                country_risk_map[country_code],
+                risk_score
+            )
+            country_disease_count[country_code] += 1
+
+        # 취항 국가 중 검역관리지역 필터링
+        affected_scores = []
+        affected_count = 0
+
+        for country_code in route_countries:
+            if country_code in country_risk_map:
+                affected_scores.append(country_risk_map[country_code])
+                affected_count += country_disease_count.get(country_code, 0)
+
+        # 점수 계산
+        if affected_scores:
+            # 감염병 경보 수준: 최대값 70% + 평균 30%
+            max_score = max(affected_scores)
+            avg_score = sum(affected_scores) / len(affected_scores)
+            factors["disease_alert"] = round(max_score * 0.7 + avg_score * 0.3, 1)
+
+            # 검역관리지역 수 (10개 이상이면 최대)
+            quarantine_factor = min(100, affected_count * 10)
+            factors["quarantine_cases"] = round(quarantine_factor, 1)
+
+            # 발생지 근접도: 취항 국가 중 감염지역 비율
+            proximity_factor = (len(affected_scores) / len(route_countries)) * 100
+            factors["outbreak_proximity"] = round(proximity_factor, 1)
+        else:
+            factors["disease_alert"] = 0
+            factors["quarantine_cases"] = 0
+            factors["outbreak_proximity"] = 0
+
+        # 최종 점수: 감염병 경보 60%, 검역관리지역 수 20%, 근접도 20%
+        final_score = (
+            factors["disease_alert"] * 0.6 +
+            factors["quarantine_cases"] * 0.2 +
+            factors["outbreak_proximity"] * 0.2
+        )
+        final_score = min(100, max(0, final_score))
+
+        return CategoryScore(
+            code="health",
+            name="보건위험",
+            score=round(final_score, 2),
+            level=self._get_risk_level(final_score),
+            factors=factors
+        )
+
+    def calculate_operational_score(
+        self,
+        airport_code: str,
+        operational_data: List[Dict[str, Any]]
+    ) -> CategoryScore:
+        """
+        운영위험 점수 계산 (항공편 지연/결항 데이터 기반)
+
+        Args:
+            airport_code: 공항 코드
+            operational_data: 운항정보 데이터 리스트
+
+        Returns:
+            CategoryScore: 운영위험 점수
+        """
+        factors = {
+            "delay_rate": 0.0,       # 지연율
+            "cancellation_rate": 0.0, # 결항율
+            "congestion": 0.0,        # 혼잡도
+        }
+
+        # 해당 공항 데이터 찾기
+        airport_data = None
+        for data in operational_data:
+            if data.get("airport_code") == airport_code:
+                airport_data = data
+                break
+
+        if not airport_data:
+            # 데이터 없으면 기본 낮은 위험도
+            return CategoryScore(
+                code="operational",
+                name="운영위험",
+                score=10.0,
+                level="LOW",
+                factors=factors
+            )
+
+        # 지연율 점수 (0-40점): 지연율 20% 이상이면 최대
+        delay_rate = airport_data.get("delay_rate", 0)
+        delay_score = min(40, delay_rate * 2)
+        factors["delay_rate"] = round(delay_score, 1)
+
+        # 결항율 점수 (0-35점): 결항율 5% 이상이면 최대
+        cancel_rate = airport_data.get("cancellation_rate", 0)
+        cancel_score = min(35, cancel_rate * 7)
+        factors["cancellation_rate"] = round(cancel_score, 1)
+
+        # 혼잡도 점수 (0-25점): 일일 운항편수 기준
+        total_flights = airport_data.get("total_flights", 0)
+        if total_flights >= 200:
+            congestion_score = 25
+        elif total_flights >= 100:
+            congestion_score = 15
+        elif total_flights >= 50:
+            congestion_score = 8
+        else:
+            congestion_score = 3
+        factors["congestion"] = round(congestion_score, 1)
+
+        # 최종 점수
+        final_score = delay_score + cancel_score + congestion_score
+        final_score = min(100, max(0, final_score))
+
+        return CategoryScore(
+            code="operational",
+            name="운영위험",
+            score=round(final_score, 2),
+            level=self._get_risk_level(final_score),
+            factors=factors
+        )
+
+    def calculate_aviation_score(
+        self,
+        airport_code: str,
+        aviation_data: List[Dict[str, Any]]
+    ) -> CategoryScore:
+        """
+        항공안전 점수 계산 (ARAIB 사고 데이터 기반)
+
+        Args:
+            airport_code: 공항 코드
+            aviation_data: 항공사고 데이터 리스트
+
+        Returns:
+            CategoryScore: 항공안전 점수
+        """
+        factors = {
+            "incident_history": 0.0,  # 사고 이력 점수
+            "near_miss": 0.0,         # 준사고 점수
+            "severity": 0.0,          # 사고 심각도
+        }
+
+        # 해당 공항 사고 필터링
+        airport_accidents = [
+            d for d in aviation_data
+            if d.get("airport_code") == airport_code
+        ]
+
+        # 전체 사고 중 항공기 사고/준사고만 필터 (공항 관계없이)
+        all_aircraft_accidents = [
+            d for d in aviation_data
+            if "항공기" in d.get("accident_type", "")
+        ]
+
+        if not airport_accidents and not all_aircraft_accidents:
+            # 사고 데이터 없음 = 낮은 위험
+            return CategoryScore(
+                code="aviation",
+                name="항공안전",
+                score=10.0,
+                level="LOW",
+                factors=factors
+            )
+
+        # 1. 해당 공항 사고 이력 점수 (0-40점)
+        airport_count = len(airport_accidents)
+        factors["incident_history"] = min(40, airport_count * 12)
+
+        # 2. 준사고 점수 (0-30점) - 전체 항공기 준사고 기반
+        near_miss_count = sum(
+            1 for d in all_aircraft_accidents
+            if "준사고" in d.get("accident_type", "")
+        )
+        factors["near_miss"] = min(30, near_miss_count * 6)
+
+        # 3. 심각도 점수 (0-30점) - 최근 사고 심각도
+        if airport_accidents:
+            severity_scores = [d.get("risk_score", 30) for d in airport_accidents]
+            avg_severity = sum(severity_scores) / len(severity_scores)
+            factors["severity"] = round(avg_severity * 0.3, 1)
+        else:
+            # 공항 직접 사고 없으면 전체 평균의 일부 반영
+            if all_aircraft_accidents:
+                all_scores = [d.get("risk_score", 30) for d in all_aircraft_accidents]
+                avg_all = sum(all_scores) / len(all_scores)
+                factors["severity"] = round(avg_all * 0.15, 1)
+
+        # 최종 점수
+        final_score = (
+            factors["incident_history"] +
+            factors["near_miss"] +
+            factors["severity"]
+        )
+        final_score = min(100, max(0, final_score))
+
+        return CategoryScore(
+            code="aviation",
+            name="항공안전",
+            score=round(final_score, 2),
+            level=self._get_risk_level(final_score),
+            factors=factors
+        )
+
     def calculate_mock_category_score(
         self,
         category_code: str,
@@ -310,6 +590,9 @@ class RiskCalculator:
         airport_name: str,
         weather_data: Optional[Dict[str, Any]] = None,
         travel_advisory_data: Optional[List[Dict[str, Any]]] = None,
+        health_data: Optional[List[Dict[str, Any]]] = None,
+        operational_data: Optional[List[Dict[str, Any]]] = None,
+        aviation_data: Optional[List[Dict[str, Any]]] = None,
     ) -> RiskResult:
         """
         종합 위험지수 계산
@@ -319,6 +602,9 @@ class RiskCalculator:
             airport_name: 공항 이름
             weather_data: 기상 데이터 (없으면 목업 사용)
             travel_advisory_data: 여행경보 데이터 (없으면 목업 사용)
+            health_data: 보건위험 데이터 (없으면 목업 사용)
+            operational_data: 운영위험 데이터 (없으면 목업 사용)
+            aviation_data: 항공안전 데이터 (없으면 목업 사용)
 
         Returns:
             RiskResult: 종합 위험지수 결과
@@ -344,16 +630,40 @@ class RiskCalculator:
                 "external", "외부요인", seed
             )
 
-        # 3. 기타 카테고리 (현재 목업, 추후 실제 데이터로 대체)
-        category_names = {
-            "aviation": "항공안전",
-            "security": "보안위협",
-            "health": "보건위험",
-            "operational": "운영위험",
-        }
+        # 3. 보건위험 (검역관리지역 데이터 또는 목업)
+        if health_data:
+            categories["health"] = self.calculate_health_score(
+                airport_code, health_data
+            )
+        else:
+            categories["health"] = self.calculate_mock_category_score(
+                "health", "보건위험", seed
+            )
 
-        for code, name in category_names.items():
-            categories[code] = self.calculate_mock_category_score(code, name, seed)
+        # 4. 운영위험 (항공편 지연/결항 데이터 또는 목업)
+        if operational_data:
+            categories["operational"] = self.calculate_operational_score(
+                airport_code, operational_data
+            )
+        else:
+            categories["operational"] = self.calculate_mock_category_score(
+                "operational", "운영위험", seed
+            )
+
+        # 5. 항공안전 (ARAIB 사고 데이터 또는 목업)
+        if aviation_data:
+            categories["aviation"] = self.calculate_aviation_score(
+                airport_code, aviation_data
+            )
+        else:
+            categories["aviation"] = self.calculate_mock_category_score(
+                "aviation", "항공안전", seed
+            )
+
+        # 6. 보안위협 (현재 목업, 추후 실제 데이터로 대체)
+        categories["security"] = self.calculate_mock_category_score(
+            "security", "보안위협", seed
+        )
 
         # 3. 종합 점수 계산 (가중 평균)
         total_score = 0

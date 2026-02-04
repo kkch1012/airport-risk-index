@@ -8,6 +8,9 @@ from datetime import date, datetime
 
 from app.collectors.weather import WeatherCollector
 from app.collectors.travel_advisory import TravelAdvisoryCollector
+from app.collectors.health_risk import HealthRiskCollector
+from app.collectors.flight_status import FlightStatusCollector
+from app.collectors.aviation_safety import AviationSafetyCollector
 from app.services.risk_calculator import RiskCalculator
 
 router = APIRouter()
@@ -51,6 +54,42 @@ async def get_travel_advisory_data() -> tuple[list, bool]:
     return result["data"], is_real_data
 
 
+async def get_health_data() -> tuple[list, bool]:
+    """보건위험(검역관리지역) 데이터 수집 및 반환"""
+    async with HealthRiskCollector() as collector:
+        result = await collector.run()
+
+    if result["status"] != "success":
+        return [], False
+
+    is_real_data = bool(collector.api_key)
+    return result["data"], is_real_data
+
+
+async def get_operational_data() -> tuple[list, bool]:
+    """운영위험(항공편 운항정보) 데이터 수집 및 반환"""
+    async with FlightStatusCollector() as collector:
+        result = await collector.run()
+
+    if result["status"] != "success":
+        return [], False
+
+    is_real_data = bool(collector.api_key)
+    return result["data"], is_real_data
+
+
+async def get_aviation_data() -> tuple[list, bool]:
+    """항공안전(ARAIB 사고) 데이터 수집 및 반환"""
+    async with AviationSafetyCollector() as collector:
+        result = await collector.run()
+
+    if result["status"] != "success":
+        return [], False
+
+    is_real_data = collector.can_crawl
+    return result["data"], is_real_data
+
+
 @router.get("/dashboard")
 async def get_dashboard():
     """대시보드 전체 현황"""
@@ -62,6 +101,15 @@ async def get_dashboard():
     # 여행경보 데이터 수집
     travel_advisory_data, is_advisory_real = await get_travel_advisory_data()
 
+    # 보건위험 데이터 수집
+    health_data, is_health_real = await get_health_data()
+
+    # 운영위험 데이터 수집
+    operational_data, is_operational_real = await get_operational_data()
+
+    # 항공안전 데이터 수집
+    aviation_data, is_aviation_real = await get_aviation_data()
+
     airport_data = []
     for code, name in AIRPORT_NAMES.items():
         # 기상 데이터가 있으면 실제 데이터 사용
@@ -72,7 +120,10 @@ async def get_dashboard():
             airport_code=code,
             airport_name=name,
             weather_data=weather_data,
-            travel_advisory_data=travel_advisory_data
+            travel_advisory_data=travel_advisory_data,
+            health_data=health_data,
+            operational_data=operational_data,
+            aviation_data=aviation_data
         )
 
         airport_data.append({
@@ -82,6 +133,9 @@ async def get_dashboard():
             "level": risk_result.risk_level,
             "weather_score": risk_result.categories["weather"].score,
             "external_score": risk_result.categories["external"].score,
+            "health_score": risk_result.categories["health"].score,
+            "operational_score": risk_result.categories["operational"].score,
+            "aviation_score": risk_result.categories["aviation"].score,
         })
 
     # 점수순 정렬 (높은 순)
@@ -117,6 +171,19 @@ async def get_dashboard():
             "severity": "CRITICAL" if advisory.get("alarm_level", 0) >= 4 else "WARNING"
         })
 
+    # 보건위험 관련 알림
+    high_risk_health = [
+        d for d in health_data
+        if d.get("risk_score", 0) >= 70
+    ]
+    for health_item in high_risk_health[:2]:  # 최대 2개
+        alerts.append({
+            "airport": "검역",
+            "type": "HEALTH",
+            "message": f"{health_item.get('country_name', '')} {health_item.get('disease_name', '')} 경보",
+            "severity": "CRITICAL" if health_item.get("risk_score", 0) >= 85 else "WARNING"
+        })
+
     return {
         "summary": {
             "total_airports": len(AIRPORT_NAMES),
@@ -129,6 +196,9 @@ async def get_dashboard():
         "data_sources": {
             "weather": "실제 데이터" if weather_map else "목업 데이터",
             "travel_advisory": "실제 데이터" if is_advisory_real else "목업 데이터",
+            "health": "실제 데이터" if is_health_real else "목업 데이터",
+            "operational": "실제 데이터" if is_operational_real else "목업 데이터",
+            "aviation": "실제 데이터" if is_aviation_real else "목업 데이터",
         }
     }
 
@@ -153,12 +223,24 @@ async def get_airport_risk(
     # 여행경보 데이터 수집
     travel_advisory_data, is_advisory_real = await get_travel_advisory_data()
 
+    # 보건위험 데이터 수집
+    health_data, is_health_real = await get_health_data()
+
+    # 운영위험 데이터 수집
+    operational_data, is_operational_real = await get_operational_data()
+
+    # 항공안전 데이터 수집
+    aviation_data, is_aviation_real = await get_aviation_data()
+
     # 위험지수 계산
     risk_result = calculator.calculate_total_risk(
         airport_code=airport_code,
         airport_name=AIRPORT_NAMES[airport_code],
         weather_data=weather_data,
-        travel_advisory_data=travel_advisory_data
+        travel_advisory_data=travel_advisory_data,
+        health_data=health_data,
+        operational_data=operational_data,
+        aviation_data=aviation_data
     )
 
     # 카테고리 데이터를 딕셔너리로 변환
@@ -184,7 +266,10 @@ async def get_airport_risk(
         "data_source": {
             "weather": "실제 데이터" if weather_data else "목업 데이터",
             "travel_advisory": "실제 데이터" if is_advisory_real else "목업 데이터",
-            "others": "목업 데이터 (추후 연동 예정)",
+            "health": "실제 데이터" if is_health_real else "목업 데이터",
+            "operational": "실제 데이터" if is_operational_real else "목업 데이터",
+            "aviation": "실제 데이터" if is_aviation_real else "목업 데이터",
+            "security": "목업 데이터 (추후 연동 예정)",
         }
     }
 
@@ -236,6 +321,9 @@ async def compare_airports(
     calculator = RiskCalculator()
     weather_map = await get_weather_data_map()
     travel_advisory_data, _ = await get_travel_advisory_data()
+    health_data, _ = await get_health_data()
+    operational_data, _ = await get_operational_data()
+    aviation_data, _ = await get_aviation_data()
 
     comparison = []
     for code in airport_codes:
@@ -248,7 +336,10 @@ async def compare_airports(
             airport_code=code,
             airport_name=AIRPORT_NAMES[code],
             weather_data=weather_data,
-            travel_advisory_data=travel_advisory_data
+            travel_advisory_data=travel_advisory_data,
+            health_data=health_data,
+            operational_data=operational_data,
+            aviation_data=aviation_data
         )
 
         comparison.append({
@@ -284,4 +375,118 @@ async def get_travel_advisory():
         "data_source": "실제 데이터" if collector.api_key else "목업 데이터",
         "summary": summary,
         "countries": result["data"],
+    }
+
+
+@router.get("/health-risk")
+async def get_health_risk():
+    """보건위험(검역관리지역) 현황 조회"""
+    async with HealthRiskCollector() as collector:
+        result = await collector.run()
+
+    if result["status"] != "success":
+        raise HTTPException(status_code=500, detail="보건위험 데이터 수집 실패")
+
+    # 요약 통계 생성
+    summary = collector.get_summary(result["data"])
+
+    return {
+        "updated_at": datetime.now().isoformat(),
+        "data_source": "실제 데이터" if collector.api_key else "목업 데이터",
+        "summary": summary,
+        "quarantine_regions": result["data"],
+    }
+
+
+@router.get("/health-risk/airports/{airport_code}")
+async def get_airport_health_risk(airport_code: str):
+    """특정 공항의 보건위험 상세 조회"""
+    airport_code = airport_code.upper()
+
+    if airport_code not in AIRPORT_NAMES:
+        raise HTTPException(status_code=404, detail="공항을 찾을 수 없습니다.")
+
+    # 공항별 취항 국가 (risk_calculator에서 가져옴)
+    from app.services.risk_calculator import AIRPORT_INTERNATIONAL_ROUTES
+
+    async with HealthRiskCollector() as collector:
+        result = await collector.run()
+
+    if result["status"] != "success":
+        raise HTTPException(status_code=500, detail="보건위험 데이터 수집 실패")
+
+    # 공항별 보건위험 계산
+    airport_health_risk = collector.calculate_airport_health_risk(
+        airport_code=airport_code,
+        data_list=result["data"],
+        airport_routes=AIRPORT_INTERNATIONAL_ROUTES
+    )
+
+    return {
+        "updated_at": datetime.now().isoformat(),
+        "data_source": "실제 데이터" if collector.api_key else "목업 데이터",
+        "airport": {
+            "code": airport_code,
+            "name": AIRPORT_NAMES[airport_code],
+        },
+        **airport_health_risk,
+    }
+
+
+@router.get("/flight-status")
+async def get_flight_status():
+    """운영위험(항공편 운항현황) 조회"""
+    async with FlightStatusCollector() as collector:
+        result = await collector.run()
+
+    if result["status"] != "success":
+        raise HTTPException(status_code=500, detail="운항정보 데이터 수집 실패")
+
+    # 요약 통계 생성
+    summary = collector.get_summary(result["data"])
+
+    return {
+        "updated_at": datetime.now().isoformat(),
+        "data_source": "실제 데이터" if collector.api_key else "목업 데이터",
+        "summary": summary,
+        "airports": result["data"],
+    }
+
+
+@router.get("/flight-status/airports/{airport_code}")
+async def get_airport_flight_status(airport_code: str):
+    """특정 공항의 운항현황 상세 조회"""
+    airport_code = airport_code.upper()
+
+    if airport_code not in AIRPORT_NAMES:
+        raise HTTPException(status_code=404, detail="공항을 찾을 수 없습니다.")
+
+    async with FlightStatusCollector() as collector:
+        result = await collector.run()
+
+    if result["status"] != "success":
+        raise HTTPException(status_code=500, detail="운항정보 데이터 수집 실패")
+
+    # 해당 공항 데이터 찾기
+    airport_data = None
+    for data in result["data"]:
+        if data.get("airport_code") == airport_code:
+            airport_data = collector.transform(data) if data.get("departures") or data.get("arrivals") else data
+            break
+
+    if not airport_data:
+        airport_data = {
+            "airport_code": airport_code,
+            "airport_name": AIRPORT_NAMES[airport_code],
+            "message": "운항 데이터 없음",
+        }
+
+    return {
+        "updated_at": datetime.now().isoformat(),
+        "data_source": "실제 데이터" if collector.api_key else "목업 데이터",
+        "airport": {
+            "code": airport_code,
+            "name": AIRPORT_NAMES[airport_code],
+        },
+        **airport_data,
     }
