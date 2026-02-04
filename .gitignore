@@ -135,3 +135,9 @@ celerybeat.pid
 
 # Jupyter
 .ipynb_checkpoints/
+
+# -------------------------------------------
+# 크롤링 데이터
+# -------------------------------------------
+backend/*.csv
+backend/araib_*.csv
