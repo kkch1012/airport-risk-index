@@ -4,6 +4,7 @@ import { fetchAirportRisk } from '@/services/api';
 import { useRiskUpdates } from '@/hooks/useRiskUpdates';
 import RiskBadge from '@/components/common/RiskBadge';
 import RiskGauge from '@/components/common/RiskGauge';
+import ExportButtons from '@/components/common/ExportButtons';
 import { CategoryBarChart } from '@/components/dashboard';
 import type { CategoryCode } from '@/types';
 
@@ -210,9 +211,12 @@ export default function AirportDetailPage() {
         )}
       </div>
 
-      {/* 업데이트 시간 */}
-      <div className="text-center text-sm text-slate-500">
-        마지막 업데이트: {new Date(data.updated_at).toLocaleString('ko-KR')}
+      {/* 내보내기 + 업데이트 시간 */}
+      <div className="flex items-center justify-between">
+        <ExportButtons airportCode={airportCode} />
+        <div className="text-sm text-slate-500">
+          마지막 업데이트: {new Date(data.updated_at).toLocaleString('ko-KR')}
+        </div>
       </div>
     </div>
   );

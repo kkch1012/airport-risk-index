@@ -4,6 +4,7 @@ import { fetchCorrelations, fetchWeights, fetchTrends } from '@/services/api';
 import TimeSeriesChart from '@/components/analytics/TimeSeriesChart';
 import CorrelationHeatmap from '@/components/analytics/CorrelationHeatmap';
 import AirportComparisonChart from '@/components/analytics/AirportComparisonChart';
+import ExportButtons from '@/components/common/ExportButtons';
 
 type Tab = 'overview' | 'timeseries' | 'correlation' | 'comparison';
 
@@ -35,9 +36,12 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-6">
       {/* 헤더 */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800">분석</h1>
-        <p className="text-slate-500">위험요인 상관분석, 시계열 추세, 공항 비교</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">분석</h1>
+          <p className="text-slate-500">위험요인 상관분석, 시계열 추세, 공항 비교</p>
+        </div>
+        <ExportButtons />
       </div>
 
       {/* 탭 네비게이션 */}
