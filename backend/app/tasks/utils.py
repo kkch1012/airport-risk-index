@@ -73,3 +73,25 @@ async def collect_aviation() -> Tuple[List[Dict], bool]:
         logger.warning("Aviation safety collection failed: %s", result.get("error"))
         return [], False
     return result["data"], collector.can_crawl
+
+
+async def collect_international_weather() -> List[Dict]:
+    """해외 공항 기상 데이터 수집"""
+    from app.collectors.international_weather import InternationalWeatherCollector
+    async with InternationalWeatherCollector() as collector:
+        result = await collector.run()
+    if result["status"] != "success":
+        logger.warning("International weather collection failed: %s", result.get("error"))
+        return []
+    return result["data"]
+
+
+async def collect_international_aviation() -> List[Dict]:
+    """해외 항공사고 데이터 수집"""
+    from app.collectors.international_aviation import InternationalAviationCollector
+    async with InternationalAviationCollector() as collector:
+        result = await collector.run()
+    if result["status"] != "success":
+        logger.warning("International aviation collection failed: %s", result.get("error"))
+        return []
+    return result["data"]

@@ -196,7 +196,9 @@ class RiskCalculator:
     def calculate_external_score(
         self,
         airport_code: str,
-        travel_advisory_data: List[Dict[str, Any]]
+        travel_advisory_data: List[Dict[str, Any]],
+        international_weather_data: Optional[List[Dict[str, Any]]] = None,
+        international_aviation_data: Optional[List[Dict[str, Any]]] = None,
     ) -> CategoryScore:
         """
         외부요인 위험 점수 계산 (여행경보 기반)
@@ -210,7 +212,9 @@ class RiskCalculator:
         """
         factors = {
             "travel_advisory": 0.0,
-            "geopolitical": 0.0,  # 추후 국제정세 데이터 연동
+            "geopolitical": 0.0,
+            "intl_weather": 0.0,
+            "intl_aviation": 0.0,
         }
 
         # 해당 공항의 국제 노선 취항 국가 조회
@@ -261,13 +265,43 @@ class RiskCalculator:
 
         factors["travel_advisory"] = round(travel_advisory_score, 1)
 
-        # 국제정세 점수는 추후 연동 (현재 여행경보 기반 추정)
-        # 여행경보 3단계 이상 국가가 있으면 국제정세 위험 증가
+        # 국제정세 점수 (여행경보 3단계 이상 기반)
         if any(s >= 70 for s in country_scores):
             factors["geopolitical"] = round(travel_advisory_score * 0.5, 1)
 
-        # 최종 점수: 여행경보 80%, 국제정세 20%
-        final_score = factors["travel_advisory"] * 0.8 + factors["geopolitical"] * 0.2
+        # 해외 기상 위험 (취항 국가 공항의 평균 기상 위험)
+        if international_weather_data and route_countries:
+            intl_weather_scores = [
+                w.get("risk_score", 0)
+                for w in international_weather_data
+                if w.get("country_code") in route_countries
+            ]
+            if intl_weather_scores:
+                factors["intl_weather"] = round(
+                    max(intl_weather_scores) * 0.6 + sum(intl_weather_scores) / len(intl_weather_scores) * 0.4,
+                    1,
+                )
+
+        # 해외 항공사고 위험 (취항 국가의 최근 사고)
+        if international_aviation_data and route_countries:
+            intl_aviation_scores = [
+                a.get("risk_score", 0)
+                for a in international_aviation_data
+                if a.get("country_code") in route_countries
+            ]
+            if intl_aviation_scores:
+                factors["intl_aviation"] = round(
+                    max(intl_aviation_scores) * 0.7 + sum(intl_aviation_scores) / len(intl_aviation_scores) * 0.3,
+                    1,
+                )
+
+        # 최종 점수: 여행경보 50%, 국제정세 15%, 해외기상 20%, 해외항공 15%
+        final_score = (
+            factors["travel_advisory"] * 0.50
+            + factors["geopolitical"] * 0.15
+            + factors["intl_weather"] * 0.20
+            + factors["intl_aviation"] * 0.15
+        )
         final_score = min(100, max(0, final_score))
 
         return CategoryScore(
@@ -599,6 +633,8 @@ class RiskCalculator:
         health_data: Optional[List[Dict[str, Any]]] = None,
         operational_data: Optional[List[Dict[str, Any]]] = None,
         aviation_data: Optional[List[Dict[str, Any]]] = None,
+        international_weather_data: Optional[List[Dict[str, Any]]] = None,
+        international_aviation_data: Optional[List[Dict[str, Any]]] = None,
     ) -> RiskResult:
         """
         종합 위험지수 계산
@@ -626,10 +662,12 @@ class RiskCalculator:
                 "weather", "기상위험", seed
             )
 
-        # 2. 외부요인 (여행경보 데이터 또는 목업)
+        # 2. 외부요인 (여행경보 + 해외 데이터 또는 목업)
         if travel_advisory_data:
             categories["external"] = self.calculate_external_score(
-                airport_code, travel_advisory_data
+                airport_code, travel_advisory_data,
+                international_weather_data=international_weather_data,
+                international_aviation_data=international_aviation_data,
             )
         else:
             categories["external"] = self.calculate_mock_category_score(

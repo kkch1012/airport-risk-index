@@ -8,6 +8,7 @@ import {
   RiskDistributionChart,
   AlertList,
 } from '@/components/dashboard';
+import InternationalAlerts from '@/components/dashboard/InternationalAlerts';
 import type { RiskLevel } from '@/types';
 
 export default function DashboardPage() {
@@ -130,9 +131,10 @@ export default function DashboardPage() {
       </div>
 
       {/* 차트 및 알림 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <RiskDistributionChart data={riskDistribution} />
         <AlertList alerts={data.alerts} />
+        <InternationalAlerts />
       </div>
 
       {/* 공항 목록 */}

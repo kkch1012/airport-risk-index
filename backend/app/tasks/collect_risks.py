@@ -18,6 +18,8 @@ from app.tasks.utils import (
     collect_health,
     collect_operational,
     collect_aviation,
+    collect_international_weather,
+    collect_international_aviation,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,15 +45,19 @@ async def _collect_and_calculate():
     health_data, _ = await collect_health()
     operational_data, _ = await collect_operational()
     aviation_data, _ = await collect_aviation()
+    intl_weather_data = await collect_international_weather()
+    intl_aviation_data = await collect_international_aviation()
 
     logger.info(
         "Collection complete — weather: %d airports, advisory: %d, health: %d, "
-        "operational: %d, aviation: %d",
+        "operational: %d, aviation: %d, intl_weather: %d, intl_aviation: %d",
         len(weather_map),
         len(travel_advisory_data),
         len(health_data),
         len(operational_data),
         len(aviation_data),
+        len(intl_weather_data),
+        len(intl_aviation_data),
     )
 
     # 2. 위험지수 계산
@@ -65,6 +71,8 @@ async def _collect_and_calculate():
             health_data=health_data,
             operational_data=operational_data,
             aviation_data=aviation_data,
+            international_weather_data=intl_weather_data,
+            international_aviation_data=intl_aviation_data,
         )
         risk_results.append(risk_result)
 

@@ -36,6 +36,7 @@ async def init_db():
     # 모델 import하여 Base.metadata에 등록
     import app.models.risk_history  # noqa: F401
     import app.models.weight_history  # noqa: F401
+    import app.models.international_incident  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
