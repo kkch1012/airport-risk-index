@@ -16,19 +16,11 @@ from app.collectors.aviation_safety import AviationSafetyCollector
 from app.services.risk_calculator import RiskCalculator
 from app.services.risk_history_service import RiskHistoryService
 from app.core.database import AsyncSessionLocal
+from app.core.constants import AIRPORT_NAMES
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# 공항 정보
-AIRPORT_NAMES = {
-    "ICN": "인천국제공항", "GMP": "김포국제공항", "PUS": "김해국제공항",
-    "CJU": "제주국제공항", "TAE": "대구국제공항", "CJJ": "청주국제공항",
-    "KWJ": "광주공항", "RSU": "여수공항", "USN": "울산공항",
-    "KPO": "포항경주공항", "WJU": "원주공항", "YNY": "양양국제공항",
-    "HIN": "사천공항", "KUV": "군산공항", "MWX": "무안국제공항",
-}
 
 
 async def get_weather_data_map() -> dict:
