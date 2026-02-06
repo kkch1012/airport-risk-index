@@ -116,8 +116,14 @@ class RiskCalculator:
         },
     }
 
-    def __init__(self):
+    def __init__(self, custom_weights: Optional[Dict[str, float]] = None):
         self.logger = logging.getLogger(__name__)
+        self._custom_weights = custom_weights
+
+    @property
+    def active_weights(self) -> Dict[str, float]:
+        """동적 가중치 반환. custom_weights가 없으면 기본값 사용."""
+        return self._custom_weights or self.CATEGORY_WEIGHTS
 
     def calculate_weather_score(self, weather_data: Dict[str, Any]) -> CategoryScore:
         """
@@ -668,7 +674,7 @@ class RiskCalculator:
         # 3. 종합 점수 계산 (가중 평균)
         total_score = 0
         for code, cat_score in categories.items():
-            weight = self.CATEGORY_WEIGHTS.get(code, 0.1)
+            weight = self.active_weights.get(code, 0.1)
             total_score += cat_score.score * weight
 
         return RiskResult(

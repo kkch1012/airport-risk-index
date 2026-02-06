@@ -30,6 +30,7 @@ async def db_session():
 
     # 모델 import → 메타데이터 등록
     import app.models.risk_history  # noqa: F401
+    import app.models.weight_history  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

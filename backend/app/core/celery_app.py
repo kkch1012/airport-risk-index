@@ -49,4 +49,9 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=9, minute=0),  # 매일 09:00
         "options": {"expires": 60 * 60},
     },
+    "recalculate-weights-weekly": {
+        "task": "app.tasks.collect_risks.recalculate_weights",
+        "schedule": crontab(hour=3, minute=0, day_of_week=1),  # 매주 월요일 03:00
+        "options": {"expires": 60 * 60},
+    },
 }

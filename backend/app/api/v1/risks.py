@@ -15,6 +15,7 @@ from app.collectors.flight_status import FlightStatusCollector
 from app.collectors.aviation_safety import AviationSafetyCollector
 from app.services.risk_calculator import RiskCalculator
 from app.services.risk_history_service import RiskHistoryService
+from app.services.weight_service import WeightService
 from app.core.database import AsyncSessionLocal
 from app.core.constants import AIRPORT_NAMES
 from app.schemas.risks import (
@@ -32,6 +33,17 @@ from app.schemas.risks import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def _get_calculator() -> RiskCalculator:
+    """동적 가중치를 로드한 RiskCalculator 생성"""
+    try:
+        async with AsyncSessionLocal() as session:
+            service = WeightService(session)
+            weights = await service.get_active_category_weights()
+        return RiskCalculator(custom_weights=weights)
+    except Exception:
+        return RiskCalculator()
 
 
 async def get_weather_data_map() -> dict:
@@ -102,7 +114,7 @@ async def get_aviation_data() -> tuple[list, bool]:
 @router.get("/dashboard", response_model=DashboardResponse)
 async def get_dashboard():
     """대시보드 전체 현황"""
-    calculator = RiskCalculator()
+    calculator = await _get_calculator()
 
     # 실제 기상 데이터 수집
     weather_map = await get_weather_data_map()
@@ -234,7 +246,7 @@ async def get_airport_risk(
     if airport_code not in AIRPORT_NAMES:
         raise HTTPException(status_code=404, detail="공항을 찾을 수 없습니다.")
 
-    calculator = RiskCalculator()
+    calculator = await _get_calculator()
 
     # 실제 기상 데이터 수집
     weather_map = await get_weather_data_map()
@@ -332,7 +344,7 @@ async def compare_airports(
     airport_codes: List[str] = Query(...),
 ):
     """공항 간 비교"""
-    calculator = RiskCalculator()
+    calculator = await _get_calculator()
     weather_map = await get_weather_data_map()
     travel_advisory_data, _ = await get_travel_advisory_data()
     health_data, _ = await get_health_data()

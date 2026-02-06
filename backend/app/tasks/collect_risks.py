@@ -9,6 +9,7 @@ from app.core.constants import AIRPORT_NAMES
 from app.services.risk_calculator import RiskCalculator
 from app.services.risk_history_service import RiskHistoryService
 from app.services.alert_service import AlertService
+from app.services.weight_service import WeightService
 from app.core.database import AsyncSessionLocal
 from app.tasks.utils import (
     run_async,
@@ -24,7 +25,16 @@ logger = logging.getLogger(__name__)
 
 async def _collect_and_calculate():
     """전체 수집 → 계산 → DB 저장 파이프라인 (async)"""
-    calculator = RiskCalculator()
+    # 동적 가중치 로드
+    try:
+        async with AsyncSessionLocal() as session:
+            weight_service = WeightService(session)
+            active_weights = await weight_service.get_active_category_weights()
+    except Exception:
+        logger.warning("Failed to load dynamic weights, using defaults")
+        active_weights = None
+
+    calculator = RiskCalculator(custom_weights=active_weights)
 
     # 1. 데이터 수집
     logger.info("Starting data collection for all sources")
@@ -107,9 +117,34 @@ async def _collect_advisory_only():
     return {"countries_collected": len(data), "is_real_data": is_real}
 
 
+async def _recalculate_weights():
+    """가중치 재산출 파이프라인 (async)"""
+    async with AsyncSessionLocal() as session:
+        service = WeightService(session)
+        result = await service.calculate_and_save_weights(
+            method="ensemble", lookback_days=365
+        )
+
+    if result:
+        return {
+            "status": "success",
+            "method": result.method,
+            "sample_size": result.sample_size,
+            "weights": result.category_weights,
+        }
+    return {"status": "skipped", "reason": "insufficient_data"}
+
+
 async def _send_daily_report():
     """일일 리포트 생성 + 발송 (async)"""
-    calculator = RiskCalculator()
+    try:
+        async with AsyncSessionLocal() as session:
+            weight_service = WeightService(session)
+            active_weights = await weight_service.get_active_category_weights()
+    except Exception:
+        active_weights = None
+
+    calculator = RiskCalculator(custom_weights=active_weights)
 
     weather_map = await collect_weather()
     travel_advisory_data, _ = await collect_travel_advisory()
@@ -205,4 +240,22 @@ def send_daily_report(self):
         return result
     except Exception as exc:
         logger.exception("[Task] send_daily_report failed")
+        raise self.retry(exc=exc)
+
+
+@celery_app.task(
+    name="app.tasks.collect_risks.recalculate_weights",
+    bind=True,
+    max_retries=1,
+    default_retry_delay=300,
+)
+def recalculate_weights(self):
+    """주간 가중치 재산출"""
+    logger.info("[Task] recalculate_weights started")
+    try:
+        result = run_async(_recalculate_weights())
+        logger.info("[Task] recalculate_weights completed: %s", result)
+        return result
+    except Exception as exc:
+        logger.exception("[Task] recalculate_weights failed")
         raise self.retry(exc=exc)
