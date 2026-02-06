@@ -1,5 +1,6 @@
 """
-Alembic 마이그레이션 환경 설정 (PostgreSQL 프로덕션용)
+Alembic 마이그레이션 환경 설정
+앱 설정(app.config)에서 DB URL을 읽어 PostgreSQL/SQLite 모두 지원
 """
 
 from logging.config import fileConfig
@@ -13,6 +14,10 @@ config = context.config
 # 로깅 설정
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# 앱 설정에서 DB URL 가져와서 alembic.ini 값 덮어쓰기
+from app.config import settings
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC)
 
 # ORM 모델 메타데이터 (자동 마이그레이션 감지용)
 from app.core.database import Base
@@ -29,6 +34,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        render_as_batch=True,
     )
 
     with context.begin_transaction():
@@ -44,7 +50,11 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            render_as_batch=True,
+        )
 
         with context.begin_transaction():
             context.run_migrations()
