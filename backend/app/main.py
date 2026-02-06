@@ -2,6 +2,8 @@
 공항 위험지수 모니터링 시스템 - FastAPI 메인 애플리케이션
 """
 
+import logging
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,14 +12,21 @@ from fastapi.responses import JSONResponse
 from app.config import settings
 from app.api.v1.router import api_router
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """애플리케이션 시작/종료 이벤트 핸들러"""
-    # 시작 시 (DB 연결은 추후 구현)
+    # 개발환경: DB 테이블 자동 생성
+    if settings.USE_SQLITE or settings.ENV == "development":
+        from app.core.database import init_db
+        try:
+            await init_db()
+            logger.info("Database tables initialized")
+        except Exception:
+            logger.exception("Failed to initialize database tables")
     yield
-    # 종료 시
-    pass
 
 
 # FastAPI 앱 생성

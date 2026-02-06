@@ -22,12 +22,20 @@ class Settings(BaseSettings):
     DB_USER: str = "postgres"
     DB_PASSWORD: str = "postgres"
 
+    # SQLite (개발용)
+    USE_SQLITE: bool = False
+    SQLITE_PATH: str = "airport_risk.db"
+
     @property
     def DATABASE_URL(self) -> str:
+        if self.USE_SQLITE:
+            return f"sqlite+aiosqlite:///{self.SQLITE_PATH}"
         return f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
     @property
     def DATABASE_URL_SYNC(self) -> str:
+        if self.USE_SQLITE:
+            return f"sqlite:///{self.SQLITE_PATH}"
         return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
     # Redis

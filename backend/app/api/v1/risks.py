@@ -2,6 +2,8 @@
 위험지수 관련 API 엔드포인트
 """
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Optional
 from datetime import date, datetime
@@ -12,6 +14,10 @@ from app.collectors.health_risk import HealthRiskCollector
 from app.collectors.flight_status import FlightStatusCollector
 from app.collectors.aviation_safety import AviationSafetyCollector
 from app.services.risk_calculator import RiskCalculator
+from app.services.risk_history_service import RiskHistoryService
+from app.core.database import AsyncSessionLocal
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -111,6 +117,7 @@ async def get_dashboard():
     aviation_data, is_aviation_real = await get_aviation_data()
 
     airport_data = []
+    risk_results = []
     for code, name in AIRPORT_NAMES.items():
         # 기상 데이터가 있으면 실제 데이터 사용
         weather_data = weather_map.get(code)
@@ -126,6 +133,7 @@ async def get_dashboard():
             aviation_data=aviation_data
         )
 
+        risk_results.append(risk_result)
         airport_data.append({
             "code": code,
             "name": name,
@@ -137,6 +145,15 @@ async def get_dashboard():
             "operational_score": risk_result.categories["operational"].score,
             "aviation_score": risk_result.categories["aviation"].score,
         })
+
+    # DB 이력 저장 (실패해도 API 응답에 영향 없음)
+    try:
+        async with AsyncSessionLocal() as session:
+            service = RiskHistoryService(session)
+            saved = await service.save_batch(risk_results)
+            logger.info("Saved %d/%d risk assessments to DB", saved, len(risk_results))
+    except Exception:
+        logger.exception("Failed to save risk assessments to DB")
 
     # 점수순 정렬 (높은 순)
     airport_data.sort(key=lambda x: x["score"], reverse=True)
@@ -280,30 +297,24 @@ async def get_risk_history(
     start_date: date,
     end_date: date,
 ):
-    """위험지수 이력 조회 (현재 목업)"""
+    """위험지수 이력 조회 (DB 기반)"""
     airport_code = airport_code.upper()
 
     if airport_code not in AIRPORT_NAMES:
         raise HTTPException(status_code=404, detail="공항을 찾을 수 없습니다.")
 
-    # 목업 이력 데이터 생성
-    import random
-    history = []
-    current = start_date
-    days = 0
+    async with AsyncSessionLocal() as session:
+        service = RiskHistoryService(session)
+        assessments = await service.get_history(airport_code, start_date, end_date)
 
-    while current <= end_date and days < 30:
-        random.seed(hash(airport_code + str(current)))
-        score = random.uniform(20, 60)
-
-        history.append({
-            "date": current.isoformat(),
-            "total_score": round(score, 2),
-        })
-
-        days += 1
-        from datetime import timedelta
-        current = current + timedelta(days=1)
+    history = [
+        {
+            "date": a.assessed_date.isoformat(),
+            "total_score": round(a.total_score, 2),
+            "risk_level": a.risk_level,
+        }
+        for a in assessments
+    ]
 
     return {
         "airport_code": airport_code,
