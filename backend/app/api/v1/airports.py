@@ -5,6 +5,8 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Optional
 
+from app.schemas.airports import AirportDetail, AirportListResponse, RegionListResponse
+
 router = APIRouter()
 
 
@@ -28,7 +30,7 @@ AIRPORTS = [
 ]
 
 
-@router.get("")
+@router.get("", response_model=AirportListResponse)
 async def get_airports(
     region: Optional[str] = None,
 ):
@@ -44,7 +46,7 @@ async def get_airports(
     }
 
 
-@router.get("/{airport_code}")
+@router.get("/{airport_code}", response_model=AirportDetail)
 async def get_airport(airport_code: str):
     """특정 공항 조회"""
     airport = next((a for a in AIRPORTS if a["code"] == airport_code.upper()), None)
@@ -55,7 +57,7 @@ async def get_airport(airport_code: str):
     return airport
 
 
-@router.get("/regions/list")
+@router.get("/regions/list", response_model=RegionListResponse)
 async def get_regions():
     """지역 목록 조회"""
     regions = list(set(a["region"] for a in AIRPORTS))

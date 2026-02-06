@@ -6,10 +6,17 @@ from fastapi import APIRouter
 from datetime import datetime
 import random
 
+from app.schemas.analytics import (
+    CorrelationResponse,
+    WeightsResponse,
+    TrendResponse,
+    StatisticsResponse,
+)
+
 router = APIRouter()
 
 
-@router.get("/correlations")
+@router.get("/correlations", response_model=CorrelationResponse)
 async def get_correlation_analysis():
     """상관분석 결과 조회"""
 
@@ -68,7 +75,7 @@ async def get_correlation_analysis():
     return correlations
 
 
-@router.get("/weights")
+@router.get("/weights", response_model=WeightsResponse)
 async def get_current_weights():
     """현재 적용 중인 가중치 조회"""
 
@@ -108,7 +115,7 @@ async def get_current_weights():
     return weights
 
 
-@router.get("/trends")
+@router.get("/trends", response_model=TrendResponse)
 async def get_trend_analysis(
     airport_code: str = None,
     category: str = None,
@@ -153,7 +160,7 @@ async def get_trend_analysis(
     }
 
 
-@router.get("/statistics")
+@router.get("/statistics", response_model=StatisticsResponse)
 async def get_statistics():
     """전체 통계"""
 

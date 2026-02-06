@@ -17,6 +17,17 @@ from app.services.risk_calculator import RiskCalculator
 from app.services.risk_history_service import RiskHistoryService
 from app.core.database import AsyncSessionLocal
 from app.core.constants import AIRPORT_NAMES
+from app.schemas.risks import (
+    DashboardResponse,
+    AirportRiskResponse,
+    RiskHistoryResponse,
+    ComparisonResponse,
+    TravelAdvisoryResponse,
+    HealthRiskResponse,
+    AirportHealthRiskResponse,
+    FlightStatusResponse,
+    AirportFlightStatusResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +99,7 @@ async def get_aviation_data() -> tuple[list, bool]:
     return result["data"], is_real_data
 
 
-@router.get("/dashboard")
+@router.get("/dashboard", response_model=DashboardResponse)
 async def get_dashboard():
     """대시보드 전체 현황"""
     calculator = RiskCalculator()
@@ -212,7 +223,7 @@ async def get_dashboard():
     }
 
 
-@router.get("/airports/{airport_code}")
+@router.get("/airports/{airport_code}", response_model=AirportRiskResponse)
 async def get_airport_risk(
     airport_code: str,
     target_date: Optional[date] = None,
@@ -283,7 +294,7 @@ async def get_airport_risk(
     }
 
 
-@router.get("/airports/{airport_code}/history")
+@router.get("/airports/{airport_code}/history", response_model=RiskHistoryResponse)
 async def get_risk_history(
     airport_code: str,
     start_date: date,
@@ -316,7 +327,7 @@ async def get_risk_history(
     }
 
 
-@router.get("/comparison")
+@router.get("/comparison", response_model=ComparisonResponse)
 async def compare_airports(
     airport_codes: List[str] = Query(...),
 ):
@@ -361,7 +372,7 @@ async def compare_airports(
     }
 
 
-@router.get("/travel-advisory")
+@router.get("/travel-advisory", response_model=TravelAdvisoryResponse)
 async def get_travel_advisory():
     """여행경보 현황 조회"""
     async with TravelAdvisoryCollector() as collector:
@@ -381,7 +392,7 @@ async def get_travel_advisory():
     }
 
 
-@router.get("/health-risk")
+@router.get("/health-risk", response_model=HealthRiskResponse)
 async def get_health_risk():
     """보건위험(검역관리지역) 현황 조회"""
     async with HealthRiskCollector() as collector:
@@ -401,7 +412,7 @@ async def get_health_risk():
     }
 
 
-@router.get("/health-risk/airports/{airport_code}")
+@router.get("/health-risk/airports/{airport_code}", response_model=AirportHealthRiskResponse)
 async def get_airport_health_risk(airport_code: str):
     """특정 공항의 보건위험 상세 조회"""
     airport_code = airport_code.upper()
@@ -436,7 +447,7 @@ async def get_airport_health_risk(airport_code: str):
     }
 
 
-@router.get("/flight-status")
+@router.get("/flight-status", response_model=FlightStatusResponse)
 async def get_flight_status():
     """운영위험(항공편 운항현황) 조회"""
     async with FlightStatusCollector() as collector:
@@ -456,7 +467,7 @@ async def get_flight_status():
     }
 
 
-@router.get("/flight-status/airports/{airport_code}")
+@router.get("/flight-status/airports/{airport_code}", response_model=AirportFlightStatusResponse)
 async def get_airport_flight_status(airport_code: str):
     """특정 공항의 운항현황 상세 조회"""
     airport_code = airport_code.upper()

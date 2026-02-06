@@ -7,11 +7,12 @@ from typing import Optional
 from datetime import datetime
 
 from app.collectors.weather import WeatherCollector
+from app.schemas.weather import WeatherListResponse, WeatherSummaryResponse
 
 router = APIRouter()
 
 
-@router.get("")
+@router.get("", response_model=WeatherListResponse)
 async def get_weather_data(
     airport_code: Optional[str] = Query(None, description="공항 코드 (예: ICN, GMP)"),
 ):
@@ -74,7 +75,7 @@ async def get_airport_weather(airport_code: str):
     return airport_data
 
 
-@router.get("/summary")
+@router.get("/summary", response_model=WeatherSummaryResponse)
 async def get_weather_summary():
     """전체 공항 기상 요약"""
     async with WeatherCollector() as collector:
