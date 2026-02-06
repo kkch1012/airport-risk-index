@@ -13,11 +13,14 @@ from app.core.database import get_db
 from app.ml.weight_calculator import DEFAULT_CATEGORY_WEIGHTS
 from app.models.risk_history import CategoryScoreRecord, RiskAssessment
 from app.schemas.analytics import (
+    CorrelationMatrixResponse,
     CorrelationResponse,
     StatisticsResponse,
+    TimeSeriesResponse,
     TrendResponse,
     WeightsResponse,
 )
+from app.services.analytics_service import AnalyticsService
 from app.services.weight_service import WeightService
 
 router = APIRouter()
@@ -176,6 +179,26 @@ async def get_trend_analysis(
         "data": trend_data,
         "statistics": stats,
     }
+
+
+@router.get("/time-series", response_model=TimeSeriesResponse)
+async def get_time_series(
+    period: str = "1M",
+    airport_code: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """시계열 데이터 조회 (종합+카테고리별)"""
+    service = AnalyticsService(db)
+    data = await service.get_time_series(period=period, airport_code=airport_code)
+    return {"data": data}
+
+
+@router.get("/correlation-matrix", response_model=CorrelationMatrixResponse)
+async def get_correlation_matrix(db: AsyncSession = Depends(get_db)):
+    """카테고리 간 상관관계 행렬"""
+    service = AnalyticsService(db)
+    result = await service.get_correlation_matrix()
+    return result
 
 
 @router.get("/statistics", response_model=StatisticsResponse)

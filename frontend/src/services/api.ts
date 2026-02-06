@@ -83,4 +83,24 @@ export const fetchWeights = async (): Promise<{
   return data;
 };
 
+// 시계열 데이터 조회
+export const fetchTimeSeries = async (
+  period?: string,
+  airportCode?: string
+): Promise<{ data: { date: string; total_score: number; categories?: Record<string, number> }[] }> => {
+  const { data } = await api.get('/analytics/time-series', {
+    params: { period, airport_code: airportCode },
+  });
+  return data;
+};
+
+// 상관관계 행렬 조회
+export const fetchCorrelationMatrix = async (): Promise<{
+  categories: string[];
+  matrix: number[][];
+}> => {
+  const { data } = await api.get('/analytics/correlation-matrix');
+  return data;
+};
+
 export default api;

@@ -86,3 +86,20 @@ export interface CorrelationData {
   last_updated: string;
   sample_size: number;
 }
+
+// 시계열 데이터
+export interface TimeSeriesDataPoint {
+  date: string;
+  total_score: number;
+  categories?: Record<string, number>;
+}
+
+export interface TimeSeriesResponse {
+  data: TimeSeriesDataPoint[];
+}
+
+// 상관관계 행렬
+export interface CorrelationMatrixData {
+  categories: string[];
+  matrix: number[][];
+}

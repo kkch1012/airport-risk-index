@@ -84,3 +84,31 @@ class StatisticsResponse(BaseModel):
     by_category: Dict[str, CategoryStat]
     by_airport: Dict[str, AirportStat]
     updated_at: str
+
+
+# ─── GET /time-series ──────────────────────────
+
+class TimeSeriesCategories(BaseModel):
+    weather: float = 0
+    aviation: float = 0
+    security: float = 0
+    health: float = 0
+    operational: float = 0
+    external: float = 0
+
+
+class TimeSeriesDataPoint(BaseModel):
+    date: str
+    total_score: float
+    categories: Dict[str, float] = {}
+
+
+class TimeSeriesResponse(BaseModel):
+    data: List[TimeSeriesDataPoint]
+
+
+# ─── GET /correlation-matrix ───────────────────
+
+class CorrelationMatrixResponse(BaseModel):
+    categories: List[str]
+    matrix: List[List[float]]
