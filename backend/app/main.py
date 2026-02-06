@@ -26,7 +26,21 @@ async def lifespan(app: FastAPI):
             logger.info("Database tables initialized")
         except Exception:
             logger.exception("Failed to initialize database tables")
+
+    # Redis Pub/Sub → WebSocket 브릿지 시작
+    import asyncio
+    from app.core.redis_pubsub import start_redis_subscriber
+    from app.core.websocket_manager import manager
+
+    async def _on_risk_update(data: dict):
+        await manager.broadcast_all(data)
+
+    subscriber_task = asyncio.create_task(start_redis_subscriber(_on_risk_update))
+    logger.info("Redis → WebSocket subscriber started")
+
     yield
+
+    subscriber_task.cancel()
 
 
 # FastAPI 앱 생성

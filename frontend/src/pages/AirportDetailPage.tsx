@@ -1,6 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { fetchAirportRisk } from '@/services/api';
+import { useRiskUpdates } from '@/hooks/useRiskUpdates';
 import RiskBadge from '@/components/common/RiskBadge';
 import RiskGauge from '@/components/common/RiskGauge';
 import { CategoryBarChart } from '@/components/dashboard';
@@ -36,12 +37,13 @@ const factorLabels: Record<string, string> = {
 
 export default function AirportDetailPage() {
   const { airportCode } = useParams<{ airportCode: string }>();
+  const { wsStatus } = useRiskUpdates({ airportCode });
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['airportRisk', airportCode],
     queryFn: () => fetchAirportRisk(airportCode!),
     enabled: !!airportCode,
-    refetchInterval: 60000,
+    refetchInterval: wsStatus === 'connected' ? false : 60000,
   });
 
   if (isLoading) {
@@ -98,6 +100,18 @@ export default function AirportDetailPage() {
             <div className="flex items-center space-x-3 mb-2">
               <span className="text-3xl">✈️</span>
               <h1 className="text-2xl font-bold text-slate-800">{data.airport.name}</h1>
+              <span
+                className={`inline-block w-2 h-2 rounded-full ${
+                  wsStatus === 'connected' ? 'bg-green-500' :
+                  wsStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+                  'bg-slate-300'
+                }`}
+                title={
+                  wsStatus === 'connected' ? '실시간 연결됨' :
+                  wsStatus === 'connecting' ? '연결 중...' :
+                  '오프라인 (폴링 모드)'
+                }
+              />
             </div>
             <div className="flex items-center space-x-4 text-slate-500">
               <span className="bg-slate-100 px-2 py-1 rounded text-sm font-mono">{data.airport.code}</span>

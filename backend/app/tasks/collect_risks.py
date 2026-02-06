@@ -91,6 +91,37 @@ async def _collect_and_calculate():
         except Exception:
             logger.exception("Alert notification failed (non-fatal)")
 
+    # 5. WebSocket 실시간 업데이트 (Redis Pub/Sub)
+    try:
+        from app.core.redis_pubsub import publish_risk_update_sync
+        from datetime import datetime
+
+        ws_data = {
+            "type": "risk_update",
+            "timestamp": datetime.now().isoformat(),
+            "data": {
+                "airports": [
+                    {
+                        "airport_code": r.airport_code,
+                        "airport_name": r.airport_name,
+                        "total_score": r.total_score,
+                        "risk_level": r.risk_level,
+                    }
+                    for r in risk_results
+                ],
+                "summary": {
+                    "total_airports": len(risk_results),
+                    "high_risk_count": len(high_risk),
+                    "average_score": round(
+                        sum(r.total_score for r in risk_results) / len(risk_results), 2
+                    ) if risk_results else 0,
+                },
+            },
+        }
+        publish_risk_update_sync(ws_data)
+    except Exception:
+        logger.debug("WebSocket publish failed (non-fatal)")
+
     return {
         "airports": len(risk_results),
         "saved": saved,

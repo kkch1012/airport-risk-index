@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { fetchDashboard } from '@/services/api';
+import { useRiskUpdates } from '@/hooks/useRiskUpdates';
 import RiskBadge from '@/components/common/RiskBadge';
 import RiskGauge from '@/components/common/RiskGauge';
 import {
@@ -10,10 +11,12 @@ import {
 import type { RiskLevel } from '@/types';
 
 export default function DashboardPage() {
+  const { wsStatus } = useRiskUpdates();
+
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['dashboard'],
     queryFn: fetchDashboard,
-    refetchInterval: 60000, // 1분마다 자동 갱신
+    refetchInterval: wsStatus === 'connected' ? false : 60000, // WS 연결 시 polling 중지
   });
 
   if (isLoading) {
@@ -54,7 +57,21 @@ export default function DashboardPage() {
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">대시보드</h1>
+          <div className="flex items-center space-x-2">
+            <h1 className="text-2xl font-bold text-slate-800">대시보드</h1>
+            <span
+              className={`inline-block w-2 h-2 rounded-full ${
+                wsStatus === 'connected' ? 'bg-green-500' :
+                wsStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+                'bg-slate-300'
+              }`}
+              title={
+                wsStatus === 'connected' ? '실시간 연결됨' :
+                wsStatus === 'connecting' ? '연결 중...' :
+                '오프라인 (폴링 모드)'
+              }
+            />
+          </div>
           <p className="text-slate-500">전체 공항 위험지수 현황</p>
         </div>
         <button
