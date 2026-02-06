@@ -8,6 +8,7 @@ from app.core.celery_app import celery_app
 from app.core.constants import AIRPORT_NAMES
 from app.services.risk_calculator import RiskCalculator
 from app.services.risk_history_service import RiskHistoryService
+from app.services.alert_service import AlertService
 from app.core.database import AsyncSessionLocal
 from app.tasks.utils import (
     run_async,
@@ -70,10 +71,21 @@ async def _collect_and_calculate():
         saved = await service.save_batch(risk_results)
 
     logger.info("Saved %d/%d risk assessments to DB", saved, len(risk_results))
+
+    # 4. HIGH/CRITICAL 알림 발송
+    notified = 0
+    if high_risk:
+        try:
+            alert_service = AlertService()
+            notified = alert_service.check_and_notify(risk_results)
+        except Exception:
+            logger.exception("Alert notification failed (non-fatal)")
+
     return {
         "airports": len(risk_results),
         "saved": saved,
         "high_risk": len(high_risk),
+        "notified": notified,
     }
 
 
@@ -93,6 +105,35 @@ async def _collect_advisory_only():
         is_real,
     )
     return {"countries_collected": len(data), "is_real_data": is_real}
+
+
+async def _send_daily_report():
+    """일일 리포트 생성 + 발송 (async)"""
+    calculator = RiskCalculator()
+
+    weather_map = await collect_weather()
+    travel_advisory_data, _ = await collect_travel_advisory()
+    health_data, _ = await collect_health()
+    operational_data, _ = await collect_operational()
+    aviation_data, _ = await collect_aviation()
+
+    risk_results = []
+    for code, name in AIRPORT_NAMES.items():
+        risk_result = calculator.calculate_total_risk(
+            airport_code=code,
+            airport_name=name,
+            weather_data=weather_map.get(code),
+            travel_advisory_data=travel_advisory_data,
+            health_data=health_data,
+            operational_data=operational_data,
+            aviation_data=aviation_data,
+        )
+        risk_results.append(risk_result)
+
+    alert_service = AlertService()
+    sent = alert_service.send_daily_report(risk_results)
+    logger.info("Daily report sent: %s (%d airports)", sent, len(risk_results))
+    return {"sent": sent, "airports": len(risk_results)}
 
 
 @celery_app.task(
@@ -146,4 +187,22 @@ def collect_advisory_data(self):
         return result
     except Exception as exc:
         logger.exception("[Task] collect_advisory_data failed")
+        raise self.retry(exc=exc)
+
+
+@celery_app.task(
+    name="app.tasks.collect_risks.send_daily_report",
+    bind=True,
+    max_retries=1,
+    default_retry_delay=300,
+)
+def send_daily_report(self):
+    """일일 리포트 발송"""
+    logger.info("[Task] send_daily_report started")
+    try:
+        result = run_async(_send_daily_report())
+        logger.info("[Task] send_daily_report completed: %s", result)
+        return result
+    except Exception as exc:
+        logger.exception("[Task] send_daily_report failed")
         raise self.retry(exc=exc)

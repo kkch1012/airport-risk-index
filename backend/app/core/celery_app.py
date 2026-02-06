@@ -44,4 +44,9 @@ celery_app.conf.beat_schedule = {
         "schedule": 6 * 60 * 60,  # 6시간
         "options": {"expires": 5 * 60 * 60},
     },
+    "send-daily-report-9am": {
+        "task": "app.tasks.collect_risks.send_daily_report",
+        "schedule": crontab(hour=9, minute=0),  # 매일 09:00
+        "options": {"expires": 60 * 60},
+    },
 }
