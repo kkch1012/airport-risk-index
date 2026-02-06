@@ -103,8 +103,10 @@ class RiskHistoryService:
         airport_code: str,
         start_date: date,
         end_date: date,
+        limit: int = 0,
+        offset: int = 0,
     ) -> List[RiskAssessment]:
-        """기간별 이력 조회"""
+        """기간별 이력 조회 (페이지네이션 지원)"""
         stmt = (
             select(RiskAssessment)
             .where(
@@ -116,8 +118,35 @@ class RiskHistoryService:
             )
             .order_by(RiskAssessment.assessed_date)
         )
+        if offset > 0:
+            stmt = stmt.offset(offset)
+        if limit > 0:
+            stmt = stmt.limit(limit)
+
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def get_history_count(
+        self,
+        airport_code: str,
+        start_date: date,
+        end_date: date,
+    ) -> int:
+        """기간별 이력 건수 조회"""
+        from sqlalchemy import func as sa_func
+
+        stmt = (
+            select(sa_func.count(RiskAssessment.id))
+            .where(
+                and_(
+                    RiskAssessment.airport_code == airport_code,
+                    RiskAssessment.assessed_date >= start_date,
+                    RiskAssessment.assessed_date <= end_date,
+                )
+            )
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
 
     async def get_latest(self, airport_code: str) -> Optional[RiskAssessment]:
         """특정 공항의 최신 평가 조회"""

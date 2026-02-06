@@ -99,7 +99,16 @@ async def _collect_and_calculate():
         except Exception:
             logger.exception("Alert notification failed (non-fatal)")
 
-    # 5. WebSocket 실시간 업데이트 (Redis Pub/Sub)
+    # 5. 캐시 무효화
+    try:
+        from app.core.cache import invalidate_cache
+        invalidate_cache("dashboard")
+        invalidate_cache("airport_risk")
+        invalidate_cache("trends")
+    except Exception:
+        logger.debug("Cache invalidation failed (non-fatal)")
+
+    # 6. WebSocket 실시간 업데이트 (Redis Pub/Sub)
     try:
         from app.core.redis_pubsub import publish_risk_update_sync
         from datetime import datetime

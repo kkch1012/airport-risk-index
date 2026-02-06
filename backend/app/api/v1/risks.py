@@ -311,16 +311,25 @@ async def get_risk_history(
     airport_code: str,
     start_date: date,
     end_date: date,
+    page: int = 1,
+    page_size: int = 50,
 ):
-    """위험지수 이력 조회 (DB 기반)"""
+    """위험지수 이력 조회 (DB 기반, 페이지네이션 지원)"""
     airport_code = airport_code.upper()
 
     if airport_code not in AIRPORT_NAMES:
         raise HTTPException(status_code=404, detail="공항을 찾을 수 없습니다.")
 
+    page_size = min(page_size, 200)  # 최대 200건
+    offset = (page - 1) * page_size
+
     async with AsyncSessionLocal() as session:
         service = RiskHistoryService(session)
-        assessments = await service.get_history(airport_code, start_date, end_date)
+        total = await service.get_history_count(airport_code, start_date, end_date)
+        assessments = await service.get_history(
+            airport_code, start_date, end_date,
+            limit=page_size, offset=offset,
+        )
 
     history = [
         {
@@ -336,6 +345,12 @@ async def get_risk_history(
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
         "history": history,
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "total_pages": (total + page_size - 1) // page_size if total > 0 else 0,
+        },
     }
 
 

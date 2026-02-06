@@ -63,11 +63,19 @@ class HistoryEntry(BaseModel):
     risk_level: str
 
 
+class PaginationInfo(BaseModel):
+    page: int = 1
+    page_size: int = 50
+    total: int = 0
+    total_pages: int = 0
+
+
 class RiskHistoryResponse(BaseModel):
     airport_code: str
     start_date: str
     end_date: str
     history: List[HistoryEntry]
+    pagination: Optional[PaginationInfo] = None
 
 
 # ─── GET /comparison ───────────────────────────────
