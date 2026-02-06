@@ -4,7 +4,7 @@ API v1 라우터 통합
 
 from fastapi import APIRouter
 
-from app.api.v1 import airports, risks, analytics, weather, ws, international
+from app.api.v1 import airports, risks, analytics, weather, ws, international, news
 
 api_router = APIRouter()
 
@@ -15,3 +15,4 @@ api_router.include_router(analytics.router, prefix="/analytics", tags=["analytic
 api_router.include_router(weather.router, prefix="/weather", tags=["weather"])
 api_router.include_router(ws.router, prefix="/ws", tags=["websocket"])
 api_router.include_router(international.router, prefix="/international", tags=["international"])
+api_router.include_router(news.router, prefix="/news", tags=["news"])
