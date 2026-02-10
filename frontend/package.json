@@ -11,16 +11,18 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.22.0",
     "@tanstack/react-query": "^5.17.0",
     "axios": "^1.6.7",
-    "zustand": "^4.5.0",
-    "recharts": "^2.12.0",
-    "date-fns": "^3.3.1",
     "clsx": "^2.1.0",
-    "tailwind-merge": "^2.2.1"
+    "date-fns": "^3.3.1",
+    "i18next": "^25.8.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-i18next": "^16.5.4",
+    "react-router-dom": "^6.22.0",
+    "recharts": "^2.12.0",
+    "tailwind-merge": "^2.2.1",
+    "zustand": "^4.5.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.48",

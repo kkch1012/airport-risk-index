@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { loginAPI, fetchMe } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 
 export default function LoginPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { setAuth, isAuthenticated } = useAuthStore();
 
@@ -25,7 +27,6 @@ export default function LoginPage() {
 
     try {
       const { access_token } = await loginAPI({ username, password });
-      // 토큰을 먼저 localStorage에 저장해야 fetchMe에서 인터셉터가 사용 가능
       localStorage.setItem('auth-storage', JSON.stringify({ token: access_token }));
       const user = await fetchMe();
       setAuth(access_token, user);
@@ -34,12 +35,12 @@ export default function LoginPage() {
       if (typeof err === 'object' && err !== null && 'response' in err) {
         const axiosErr = err as { response?: { status?: number } };
         if (axiosErr.response?.status === 401) {
-          setError('아이디 또는 비밀번호가 올바르지 않습니다.');
+          setError(t('login.invalidCredentials'));
         } else {
-          setError('로그인 중 오류가 발생했습니다.');
+          setError(t('login.serverError'));
         }
       } else {
-        setError('서버에 연결할 수 없습니다.');
+        setError(t('login.connectionError'));
       }
     } finally {
       setLoading(false);
@@ -52,9 +53,9 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           <span className="text-4xl">✈️</span>
           <h1 className="mt-3 text-2xl font-bold text-slate-800">
-            공항 위험지수
+            {t('login.title')}
           </h1>
-          <p className="mt-1 text-sm text-slate-500">관리자 로그인</p>
+          <p className="mt-1 text-sm text-slate-500">{t('login.subtitle')}</p>
         </div>
 
         <form
@@ -69,7 +70,7 @@ export default function LoginPage() {
 
           <div>
             <label htmlFor="username" className="block text-sm font-medium text-slate-700 mb-1">
-              사용자명
+              {t('login.username')}
             </label>
             <input
               id="username"
@@ -86,7 +87,7 @@ export default function LoginPage() {
 
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1">
-              비밀번호
+              {t('login.password')}
             </label>
             <input
               id="password"
@@ -108,12 +109,12 @@ export default function LoginPage() {
                        hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed
                        transition-colors"
           >
-            {loading ? '로그인 중...' : '로그인'}
+            {loading ? t('login.submitting') : t('login.submit')}
           </button>
         </form>
 
         <p className="mt-4 text-center text-xs text-slate-400">
-          계정이 없으면 관리자에게 문의하세요.
+          {t('login.noAccount')}
         </p>
       </div>
     </div>

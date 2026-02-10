@@ -1,4 +1,5 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { useTranslation } from 'react-i18next';
 import type { RiskLevel } from '@/types';
 
 interface RiskDistributionChartProps {
@@ -12,23 +13,18 @@ const COLORS: Record<RiskLevel, string> = {
   CRITICAL: '#ef4444',
 };
 
-const LABELS: Record<RiskLevel, string> = {
-  LOW: '정상',
-  MODERATE: '주의',
-  HIGH: '경계',
-  CRITICAL: '심각',
-};
-
 export default function RiskDistributionChart({ data }: RiskDistributionChartProps) {
+  const { t } = useTranslation();
+
   const chartData = data.map((item) => ({
-    name: LABELS[item.level],
+    name: t(`riskLevel.${item.level}`),
     value: item.count,
     color: COLORS[item.level],
   }));
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
-      <h3 className="text-lg font-semibold text-slate-800 mb-4">위험등급 분포</h3>
+      <h3 className="text-lg font-semibold text-slate-800 mb-4">{t('distribution.title')}</h3>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -40,7 +36,7 @@ export default function RiskDistributionChart({ data }: RiskDistributionChartPro
               outerRadius={80}
               paddingAngle={5}
               dataKey="value"
-              label={({ name, value }) => `${name}: ${value}개`}
+              label={({ name, value }) => `${name}: ${value}`}
               labelLine={false}
             >
               {chartData.map((entry, index) => (
@@ -48,7 +44,7 @@ export default function RiskDistributionChart({ data }: RiskDistributionChartPro
               ))}
             </Pie>
             <Tooltip
-              formatter={(value: number) => [`${value}개 공항`, '']}
+              formatter={(value: number) => [t('distribution.airportCount', { count: value }), '']}
             />
             <Legend
               verticalAlign="bottom"

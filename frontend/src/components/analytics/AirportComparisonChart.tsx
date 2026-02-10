@@ -1,35 +1,24 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Legend, Tooltip,
 } from 'recharts';
 import { fetchComparison } from '@/services/api';
 
-const AIRPORT_OPTIONS = [
-  { code: 'ICN', name: '인천' },
-  { code: 'GMP', name: '김포' },
-  { code: 'PUS', name: '김해' },
-  { code: 'CJU', name: '제주' },
-  { code: 'TAE', name: '대구' },
-  { code: 'CJJ', name: '청주' },
-  { code: 'KWJ', name: '광주' },
-  { code: 'MWX', name: '무안' },
-];
+const AIRPORT_CODES = ['ICN', 'GMP', 'PUS', 'CJU', 'TAE', 'CJJ', 'KWJ', 'MWX'] as const;
 
 const COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b'];
 
-const categoryLabels: Record<string, string> = {
-  weather: '기상',
-  aviation: '항공',
-  security: '보안',
-  health: '보건',
-  operational: '운영',
-  external: '외부',
-};
-
 export default function AirportComparisonChart() {
+  const { t } = useTranslation();
   const [selected, setSelected] = useState<string[]>(['ICN', 'PUS']);
+
+  const AIRPORT_OPTIONS = AIRPORT_CODES.map((code) => ({
+    code,
+    name: t(`airports.${code}`),
+  }));
 
   const { data, isLoading } = useQuery({
     queryKey: ['comparison', selected],
@@ -46,11 +35,10 @@ export default function AirportComparisonChart() {
     });
   };
 
-  // 레이더 차트용 데이터 변환
   const chartData = data?.comparison
     ? Object.keys(data.comparison[0]?.categories || {}).map((cat) => {
         const point: Record<string, string | number> = {
-          category: categoryLabels[cat] || cat,
+          category: t(`category.${cat}Short` as const, { defaultValue: cat }),
         };
         data.comparison.forEach((airport) => {
           point[airport.code] = airport.categories[cat] || 0;
@@ -61,7 +49,7 @@ export default function AirportComparisonChart() {
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
-      <h3 className="text-lg font-semibold text-slate-800 mb-4">공항 비교</h3>
+      <h3 className="text-lg font-semibold text-slate-800 mb-4">{t('comparison.title')}</h3>
 
       {/* 공항 선택 */}
       <div className="flex flex-wrap gap-2 mb-4">
@@ -79,12 +67,12 @@ export default function AirportComparisonChart() {
           </button>
         ))}
       </div>
-      <div className="text-xs text-slate-400 mb-4">2~4개 공항 선택 가능</div>
+      <div className="text-xs text-slate-400 mb-4">{t('comparison.selectHint')}</div>
 
       {isLoading ? (
-        <div className="h-64 flex items-center justify-center text-slate-400">로딩 중...</div>
+        <div className="h-64 flex items-center justify-center text-slate-400">{t('common.loadingShort')}</div>
       ) : !chartData.length ? (
-        <div className="h-64 flex items-center justify-center text-slate-400">데이터가 없습니다</div>
+        <div className="h-64 flex items-center justify-center text-slate-400">{t('common.noData')}</div>
       ) : (
         <ResponsiveContainer width="100%" height={350}>
           <RadarChart data={chartData}>

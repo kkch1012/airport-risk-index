@@ -1,0 +1,215 @@
+{
+  "common": {
+    "loading": "데이터를 불러오는 중...",
+    "loadingShort": "로딩 중...",
+    "error": "데이터를 불러오는데 실패했습니다.",
+    "retry": "다시 시도",
+    "riskIndex": "위험지수",
+    "refresh": "새로고침",
+    "noData": "데이터가 없습니다",
+    "score": "{{score}}점",
+    "count": "{{count}}개",
+    "countCase": "{{count}}건",
+    "lastUpdated": "마지막 업데이트: {{time}}"
+  },
+  "nav": {
+    "dashboard": "대시보드",
+    "analytics": "분석",
+    "login": "로그인",
+    "logout": "로그아웃"
+  },
+  "ws": {
+    "connected": "실시간 연결됨",
+    "connecting": "연결 중...",
+    "offline": "오프라인 (폴링 모드)"
+  },
+  "dashboard": {
+    "title": "대시보드",
+    "subtitle": "전체 공항 위험지수 현황",
+    "totalAirports": "총 공항",
+    "highRiskAirports": "고위험 공항",
+    "avgRiskIndex": "평균 위험지수",
+    "activeAlerts": "활성 알림",
+    "airportRiskTable": "공항별 위험지수",
+    "airportRiskTableDesc": "위험지수가 높은 순으로 정렬됩니다.",
+    "rank": "순위",
+    "airport": "공항",
+    "totalRiskIndex": "종합 위험지수",
+    "weatherRisk": "기상 위험",
+    "grade": "등급",
+    "detail": "상세보기"
+  },
+  "riskLevel": {
+    "LOW": "정상",
+    "MODERATE": "주의",
+    "HIGH": "경계",
+    "CRITICAL": "심각"
+  },
+  "category": {
+    "weather": "기상위험",
+    "aviation": "항공안전",
+    "security": "보안위협",
+    "health": "보건위험",
+    "operational": "운영위험",
+    "external": "외부요인",
+    "weatherShort": "기상",
+    "aviationShort": "항공",
+    "securityShort": "보안",
+    "healthShort": "보건",
+    "operationalShort": "운영",
+    "externalShort": "외부"
+  },
+  "categoryDesc": {
+    "weather": "풍속, 강수, 시정 등",
+    "aviation": "사고이력, 준사고, 조류충돌",
+    "security": "테러위협, 밀수, 보안사고",
+    "health": "전염병, 검역, 감염병경보",
+    "operational": "혼잡도, 지연율, 결항",
+    "external": "여행경보, 국제정세"
+  },
+  "factors": {
+    "wind_speed": "풍속",
+    "precipitation": "강수량",
+    "humidity": "습도",
+    "precipitation_type": "강수형태",
+    "incident_history": "사고이력",
+    "near_miss": "준사고",
+    "bird_strike": "조류충돌",
+    "terror_threat": "테러위협",
+    "smuggling": "밀수",
+    "illegal_entry": "불법입국",
+    "disease_alert": "감염병경보",
+    "quarantine_cases": "검역건수",
+    "congestion": "혼잡도",
+    "delay_rate": "지연율",
+    "travel_advisory": "여행경보",
+    "geopolitical": "국제정세"
+  },
+  "detail": {
+    "backToDashboard": "대시보드로 돌아가기",
+    "overallGrade": "종합 위험등급",
+    "dataSource": "데이터 소스",
+    "dataSourceWeather": "기상: {{value}}",
+    "dataSourceOthers": "기타: {{value}}",
+    "riskLevel": "위험도",
+    "subFactors": "세부 요인",
+    "categoryChart": "카테고리별 위험지수"
+  },
+  "alert": {
+    "title": "실시간 알림",
+    "noAlerts": "현재 발생한 알림이 없습니다.",
+    "typeWeather": "기상",
+    "typeSecurity": "보안",
+    "typeHealth": "보건",
+    "typeOperational": "운영",
+    "typeAviation": "항공"
+  },
+  "timeAgo": {
+    "justNow": "방금 전",
+    "minutesAgo": "{{count}}분 전",
+    "hoursAgo": "{{count}}시간 전"
+  },
+  "weather": {
+    "temperature": "기온",
+    "windSpeed": "풍속",
+    "humidity": "습도",
+    "precipitation": "강수",
+    "ptyNone": "없음",
+    "ptyRain": "비",
+    "ptyRainSnow": "비/눈",
+    "ptySnow": "눈",
+    "ptyShower": "소나기",
+    "ptyDrizzle": "빗방울",
+    "ptyDrizzleSnow": "빗방울눈날림",
+    "ptySnowDrift": "눈날림"
+  },
+  "distribution": {
+    "title": "위험등급 분포",
+    "airportCount": "{{count}}개 공항"
+  },
+  "international": {
+    "title": "해외 위험 현황",
+    "incidents": "항공사고",
+    "weatherAlerts": "기상 경보",
+    "highRisk": "{{count}}건 고위험",
+    "monitoring": "{{count}}개 공항 모니터링",
+    "recentIncidents": "최근 해외 사고",
+    "internationalWeather": "해외 기상 경보"
+  },
+  "news": {
+    "title": "뉴스 위험 감지",
+    "noNews": "최근 위험 뉴스가 없습니다."
+  },
+  "analytics": {
+    "title": "분석",
+    "subtitle": "위험요인 상관분석, 시계열 추세, 공항 비교",
+    "tabOverview": "개요",
+    "tabTimeSeries": "시계열",
+    "tabCorrelation": "상관관계",
+    "tabComparison": "공항 비교",
+    "correlationResults": "상관분석 결과",
+    "significant": "유의미",
+    "incidentCount": "사고수",
+    "severityScore": "심각도",
+    "analysisPeriod": "분석 기간: {{count, number}}개 샘플",
+    "categoryWeights": "카테고리 가중치",
+    "trendStats": "트렌드 통계 (최근 1개월)",
+    "average": "평균",
+    "min": "최소",
+    "max": "최대",
+    "trend": "추세",
+    "trendIncreasing": "상승",
+    "trendDecreasing": "하락",
+    "trendStable": "유지"
+  },
+  "timeSeries": {
+    "title": "위험지수 시계열",
+    "airportCode": "공항코드",
+    "period1W": "1주",
+    "period1M": "1개월",
+    "period3M": "3개월",
+    "period6M": "6개월",
+    "totalRiskIndex": "종합 위험지수"
+  },
+  "correlation": {
+    "title": "카테고리 상관관계",
+    "noData": "데이터가 부족합니다 (최소 30일 이력 필요)",
+    "negative": "음의 상관",
+    "none": "없음",
+    "positive": "양의 상관"
+  },
+  "comparison": {
+    "title": "공항 비교",
+    "selectHint": "2~4개 공항 선택 가능"
+  },
+  "airports": {
+    "ICN": "인천",
+    "GMP": "김포",
+    "PUS": "김해",
+    "CJU": "제주",
+    "TAE": "대구",
+    "CJJ": "청주",
+    "KWJ": "광주",
+    "MWX": "무안"
+  },
+  "export": {
+    "label": "내보내기",
+    "loginRequired": "로그인 후 이용 가능"
+  },
+  "login": {
+    "title": "공항 위험지수",
+    "subtitle": "관리자 로그인",
+    "username": "사용자명",
+    "password": "비밀번호",
+    "submit": "로그인",
+    "submitting": "로그인 중...",
+    "invalidCredentials": "아이디 또는 비밀번호가 올바르지 않습니다.",
+    "serverError": "로그인 중 오류가 발생했습니다.",
+    "connectionError": "서버에 연결할 수 없습니다.",
+    "noAccount": "계정이 없으면 관리자에게 문의하세요."
+  },
+  "app": {
+    "title": "공항 위험지수",
+    "footer": "공항 위험지수 모니터링 시스템 v1.0.0"
+  }
+}

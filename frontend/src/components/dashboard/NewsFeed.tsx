@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import api from '@/services/api';
 
 interface NewsArticle {
@@ -12,14 +13,6 @@ interface NewsArticle {
   airport_code: string | null;
 }
 
-const categoryLabels: Record<string, string> = {
-  weather: '기상',
-  security: '보안',
-  operational: '운영',
-  health: '보건',
-  aviation: '항공',
-};
-
 const categoryColors: Record<string, string> = {
   weather: 'bg-indigo-100 text-indigo-700',
   security: 'bg-red-100 text-red-700',
@@ -29,20 +22,22 @@ const categoryColors: Record<string, string> = {
 };
 
 export default function NewsFeed() {
+  const { t } = useTranslation();
+
   const { data, isLoading } = useQuery<{ articles: NewsArticle[]; total: number }>({
     queryKey: ['newsRecent'],
     queryFn: async () => {
       const { data } = await api.get('/news/recent?limit=10');
       return data;
     },
-    refetchInterval: 300000, // 5분
+    refetchInterval: 300000,
   });
 
   if (isLoading || !data) {
     return (
       <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-slate-800 mb-4">뉴스 위험 감지</h3>
-        <div className="text-sm text-slate-400">불러오는 중...</div>
+        <h3 className="text-lg font-semibold text-slate-800 mb-4">{t('news.title')}</h3>
+        <div className="text-sm text-slate-400">{t('common.loadingShort')}</div>
       </div>
     );
   }
@@ -50,8 +45,8 @@ export default function NewsFeed() {
   if (data.articles.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-slate-800 mb-4">뉴스 위험 감지</h3>
-        <div className="text-sm text-slate-400">최근 위험 뉴스가 없습니다.</div>
+        <h3 className="text-lg font-semibold text-slate-800 mb-4">{t('news.title')}</h3>
+        <div className="text-sm text-slate-400">{t('news.noNews')}</div>
       </div>
     );
   }
@@ -59,8 +54,8 @@ export default function NewsFeed() {
   return (
     <div className="bg-white rounded-lg shadow p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-slate-800">뉴스 위험 감지</h3>
-        <span className="text-xs text-slate-400">{data.total}건</span>
+        <h3 className="text-lg font-semibold text-slate-800">{t('news.title')}</h3>
+        <span className="text-xs text-slate-400">{t('common.countCase', { count: data.total })}</span>
       </div>
 
       <div className="space-y-3">
@@ -70,7 +65,7 @@ export default function NewsFeed() {
               <span className={`text-xs px-1.5 py-0.5 rounded whitespace-nowrap ${
                 categoryColors[article.category] || 'bg-slate-100 text-slate-600'
               }`}>
-                {categoryLabels[article.category] || article.category}
+                {t(`category.${article.category}Short` as const, { defaultValue: article.category })}
               </span>
               <a
                 href={article.url}

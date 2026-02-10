@@ -1,19 +1,25 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
 
-const navigation = [
-  { name: '대시보드', path: '/' },
-  { name: '분석', path: '/analytics' },
-];
-
 export default function Layout() {
+  const { t, i18n } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const { isAuthenticated, user, logout } = useAuthStore();
 
+  const navigation = [
+    { name: t('nav.dashboard'), path: '/' },
+    { name: t('nav.analytics'), path: '/analytics' },
+  ];
+
   const handleLogout = () => {
     logout();
     navigate('/');
+  };
+
+  const toggleLang = () => {
+    i18n.changeLanguage(i18n.language === 'ko' ? 'en' : 'ko');
   };
 
   return (
@@ -26,7 +32,7 @@ export default function Layout() {
             <Link to="/" className="flex items-center space-x-2">
               <span className="text-2xl">✈️</span>
               <span className="text-xl font-bold text-slate-800">
-                공항 위험지수
+                {t('app.title')}
               </span>
             </Link>
 
@@ -47,8 +53,14 @@ export default function Layout() {
               ))}
             </nav>
 
-            {/* 인증 상태 */}
+            {/* 언어 토글 + 인증 상태 */}
             <div className="flex items-center gap-3">
+              <button
+                onClick={toggleLang}
+                className="px-2 py-1 text-xs font-medium border border-slate-300 rounded hover:bg-slate-100 transition-colors text-slate-600"
+              >
+                {i18n.language === 'ko' ? 'EN' : 'KO'}
+              </button>
               {isAuthenticated && user ? (
                 <>
                   <span className="text-sm text-slate-600">{user.username}</span>
@@ -56,7 +68,7 @@ export default function Layout() {
                     onClick={handleLogout}
                     className="text-sm text-slate-500 hover:text-slate-700 transition-colors"
                   >
-                    로그아웃
+                    {t('nav.logout')}
                   </button>
                 </>
               ) : (
@@ -64,7 +76,7 @@ export default function Layout() {
                   to="/login"
                   className="text-sm text-blue-600 hover:text-blue-800 transition-colors"
                 >
-                  로그인
+                  {t('nav.login')}
                 </Link>
               )}
             </div>
@@ -81,7 +93,7 @@ export default function Layout() {
       <footer className="bg-white border-t border-slate-200 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <p className="text-center text-sm text-slate-500">
-            공항 위험지수 모니터링 시스템 v1.0.0
+            {t('app.footer')}
           </p>
         </div>
       </footer>

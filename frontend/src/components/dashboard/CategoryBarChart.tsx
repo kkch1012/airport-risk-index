@@ -8,6 +8,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts';
+import { useTranslation } from 'react-i18next';
 
 interface CategoryData {
   code: string;
@@ -29,10 +30,12 @@ const CATEGORY_COLORS: Record<string, string> = {
   external: '#8b5cf6',
 };
 
-export default function CategoryBarChart({ data, title = '카테고리별 위험지수' }: CategoryBarChartProps) {
+export default function CategoryBarChart({ data, title }: CategoryBarChartProps) {
+  const { t } = useTranslation();
+  const chartTitle = title || t('detail.categoryChart');
   return (
     <div className="bg-white rounded-lg shadow p-6">
-      <h3 className="text-lg font-semibold text-slate-800 mb-4">{title}</h3>
+      <h3 className="text-lg font-semibold text-slate-800 mb-4">{chartTitle}</h3>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} layout="vertical" margin={{ left: 20, right: 20 }}>
@@ -45,7 +48,7 @@ export default function CategoryBarChart({ data, title = '카테고리별 위험
               tick={{ fontSize: 12 }}
             />
             <Tooltip
-              formatter={(value: number) => [`${value.toFixed(1)}점`, '위험지수']}
+              formatter={(value: number) => [`${value.toFixed(1)}`, t('common.riskIndex')]}
               labelFormatter={(label) => `${label}`}
             />
             <Bar dataKey="score" radius={[0, 4, 4, 0]}>

@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 interface RiskGaugeProps {
   score: number;
   size?: 'sm' | 'md' | 'lg';
@@ -18,6 +20,7 @@ const sizeConfig = {
 };
 
 export default function RiskGauge({ score, size = 'md', showLabel = true }: RiskGaugeProps) {
+  const { t } = useTranslation();
   const config = sizeConfig[size];
   const radius = (config.width - config.strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
@@ -64,7 +67,7 @@ export default function RiskGauge({ score, size = 'md', showLabel = true }: Risk
         </div>
       </div>
       {showLabel && (
-        <span className="mt-1 text-xs text-slate-500">위험지수</span>
+        <span className="mt-1 text-xs text-slate-500">{t('common.riskIndex')}</span>
       )}
     </div>
   );

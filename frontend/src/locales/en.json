@@ -1,0 +1,215 @@
+{
+  "common": {
+    "loading": "Loading data...",
+    "loadingShort": "Loading...",
+    "error": "Failed to load data.",
+    "retry": "Retry",
+    "riskIndex": "Risk Index",
+    "refresh": "Refresh",
+    "noData": "No data available",
+    "score": "{{score}}",
+    "count": "{{count}}",
+    "countCase": "{{count}}",
+    "lastUpdated": "Last updated: {{time}}"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "analytics": "Analytics",
+    "login": "Sign in",
+    "logout": "Sign out"
+  },
+  "ws": {
+    "connected": "Real-time connected",
+    "connecting": "Connecting...",
+    "offline": "Offline (polling mode)"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Overall Airport Risk Status",
+    "totalAirports": "Total Airports",
+    "highRiskAirports": "High Risk Airports",
+    "avgRiskIndex": "Average Risk Index",
+    "activeAlerts": "Active Alerts",
+    "airportRiskTable": "Airport Risk Index",
+    "airportRiskTableDesc": "Sorted by risk index in descending order.",
+    "rank": "Rank",
+    "airport": "Airport",
+    "totalRiskIndex": "Total Risk Index",
+    "weatherRisk": "Weather Risk",
+    "grade": "Grade",
+    "detail": "Details"
+  },
+  "riskLevel": {
+    "LOW": "Low",
+    "MODERATE": "Moderate",
+    "HIGH": "High",
+    "CRITICAL": "Critical"
+  },
+  "category": {
+    "weather": "Weather Risk",
+    "aviation": "Aviation Safety",
+    "security": "Security Threat",
+    "health": "Health Risk",
+    "operational": "Operational Risk",
+    "external": "External Factors",
+    "weatherShort": "Weather",
+    "aviationShort": "Aviation",
+    "securityShort": "Security",
+    "healthShort": "Health",
+    "operationalShort": "Operational",
+    "externalShort": "External"
+  },
+  "categoryDesc": {
+    "weather": "Wind speed, precipitation, visibility, etc.",
+    "aviation": "Incident history, near-miss, bird strikes",
+    "security": "Terror threat, smuggling, security incidents",
+    "health": "Epidemics, quarantine, disease alerts",
+    "operational": "Congestion, delay rate, cancellations",
+    "external": "Travel advisories, geopolitics"
+  },
+  "factors": {
+    "wind_speed": "Wind Speed",
+    "precipitation": "Precipitation",
+    "humidity": "Humidity",
+    "precipitation_type": "Precip. Type",
+    "incident_history": "Incident History",
+    "near_miss": "Near Miss",
+    "bird_strike": "Bird Strike",
+    "terror_threat": "Terror Threat",
+    "smuggling": "Smuggling",
+    "illegal_entry": "Illegal Entry",
+    "disease_alert": "Disease Alert",
+    "quarantine_cases": "Quarantine Cases",
+    "congestion": "Congestion",
+    "delay_rate": "Delay Rate",
+    "travel_advisory": "Travel Advisory",
+    "geopolitical": "Geopolitical"
+  },
+  "detail": {
+    "backToDashboard": "Back to Dashboard",
+    "overallGrade": "Overall Risk Grade",
+    "dataSource": "Data Source",
+    "dataSourceWeather": "Weather: {{value}}",
+    "dataSourceOthers": "Others: {{value}}",
+    "riskLevel": "Risk Level",
+    "subFactors": "Sub-factors",
+    "categoryChart": "Risk Index by Category"
+  },
+  "alert": {
+    "title": "Real-time Alerts",
+    "noAlerts": "No active alerts at this time.",
+    "typeWeather": "Weather",
+    "typeSecurity": "Security",
+    "typeHealth": "Health",
+    "typeOperational": "Operational",
+    "typeAviation": "Aviation"
+  },
+  "timeAgo": {
+    "justNow": "Just now",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago"
+  },
+  "weather": {
+    "temperature": "Temperature",
+    "windSpeed": "Wind Speed",
+    "humidity": "Humidity",
+    "precipitation": "Precipitation",
+    "ptyNone": "None",
+    "ptyRain": "Rain",
+    "ptyRainSnow": "Rain/Snow",
+    "ptySnow": "Snow",
+    "ptyShower": "Shower",
+    "ptyDrizzle": "Drizzle",
+    "ptyDrizzleSnow": "Drizzle/Snow",
+    "ptySnowDrift": "Snow Drift"
+  },
+  "distribution": {
+    "title": "Risk Level Distribution",
+    "airportCount": "{{count}} airports"
+  },
+  "international": {
+    "title": "International Risk Status",
+    "incidents": "Aviation Incidents",
+    "weatherAlerts": "Weather Alerts",
+    "highRisk": "{{count}} high risk",
+    "monitoring": "{{count}} airports monitored",
+    "recentIncidents": "Recent International Incidents",
+    "internationalWeather": "International Weather Alerts"
+  },
+  "news": {
+    "title": "News Risk Detection",
+    "noNews": "No recent risk-related news."
+  },
+  "analytics": {
+    "title": "Analytics",
+    "subtitle": "Correlation analysis, time series, airport comparison",
+    "tabOverview": "Overview",
+    "tabTimeSeries": "Time Series",
+    "tabCorrelation": "Correlation",
+    "tabComparison": "Comparison",
+    "correlationResults": "Correlation Analysis",
+    "significant": "Significant",
+    "incidentCount": "Incidents",
+    "severityScore": "Severity",
+    "analysisPeriod": "Analysis period: {{count, number}} samples",
+    "categoryWeights": "Category Weights",
+    "trendStats": "Trend Statistics (Last Month)",
+    "average": "Average",
+    "min": "Min",
+    "max": "Max",
+    "trend": "Trend",
+    "trendIncreasing": "Rising",
+    "trendDecreasing": "Falling",
+    "trendStable": "Stable"
+  },
+  "timeSeries": {
+    "title": "Risk Index Time Series",
+    "airportCode": "Airport Code",
+    "period1W": "1W",
+    "period1M": "1M",
+    "period3M": "3M",
+    "period6M": "6M",
+    "totalRiskIndex": "Total Risk Index"
+  },
+  "correlation": {
+    "title": "Category Correlation",
+    "noData": "Insufficient data (minimum 30 days of history required)",
+    "negative": "Negative",
+    "none": "None",
+    "positive": "Positive"
+  },
+  "comparison": {
+    "title": "Airport Comparison",
+    "selectHint": "Select 2-4 airports"
+  },
+  "airports": {
+    "ICN": "Incheon",
+    "GMP": "Gimpo",
+    "PUS": "Gimhae",
+    "CJU": "Jeju",
+    "TAE": "Daegu",
+    "CJJ": "Cheongju",
+    "KWJ": "Gwangju",
+    "MWX": "Muan"
+  },
+  "export": {
+    "label": "Export",
+    "loginRequired": "Sign in to export"
+  },
+  "login": {
+    "title": "Airport Risk Index",
+    "subtitle": "Admin Login",
+    "username": "Username",
+    "password": "Password",
+    "submit": "Sign in",
+    "submitting": "Signing in...",
+    "invalidCredentials": "Invalid username or password.",
+    "serverError": "An error occurred during login.",
+    "connectionError": "Unable to connect to server.",
+    "noAccount": "Contact an administrator to create an account."
+  },
+  "app": {
+    "title": "Airport Risk Index",
+    "footer": "Airport Risk Index Monitoring System v1.0.0"
+  }
+}

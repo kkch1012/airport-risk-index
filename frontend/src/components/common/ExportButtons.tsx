@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -14,6 +15,7 @@ const FORMATS = [
 ] as const;
 
 export default function ExportButtons({ airportCode }: ExportButtonsProps) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState<string | null>(null);
   const { isAuthenticated } = useAuthStore();
 
@@ -50,12 +52,12 @@ export default function ExportButtons({ airportCode }: ExportButtonsProps) {
   if (!isAuthenticated) {
     return (
       <div className="flex items-center gap-2">
-        <span className="text-xs text-slate-400 mr-1">내보내기</span>
+        <span className="text-xs text-slate-400 mr-1">{t('export.label')}</span>
         <Link
           to="/login"
           className="text-xs text-blue-600 hover:text-blue-800 hover:underline"
         >
-          로그인 후 이용 가능
+          {t('export.loginRequired')}
         </Link>
       </div>
     );
@@ -63,7 +65,7 @@ export default function ExportButtons({ airportCode }: ExportButtonsProps) {
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs text-slate-400 mr-1">내보내기</span>
+      <span className="text-xs text-slate-400 mr-1">{t('export.label')}</span>
       {FORMATS.map((fmt) => (
         <button
           key={fmt.key}

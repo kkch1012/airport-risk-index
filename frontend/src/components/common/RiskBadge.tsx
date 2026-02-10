@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { RiskLevel } from '@/types';
 
 interface RiskBadgeProps {
@@ -5,11 +6,11 @@ interface RiskBadgeProps {
   size?: 'sm' | 'md' | 'lg';
 }
 
-const levelConfig: Record<RiskLevel, { label: string; bgColor: string; textColor: string }> = {
-  LOW: { label: '정상', bgColor: 'bg-green-100', textColor: 'text-green-800' },
-  MODERATE: { label: '주의', bgColor: 'bg-yellow-100', textColor: 'text-yellow-800' },
-  HIGH: { label: '경계', bgColor: 'bg-orange-100', textColor: 'text-orange-800' },
-  CRITICAL: { label: '심각', bgColor: 'bg-red-100', textColor: 'text-red-800' },
+const styleConfig: Record<RiskLevel, { bgColor: string; textColor: string }> = {
+  LOW: { bgColor: 'bg-green-100', textColor: 'text-green-800' },
+  MODERATE: { bgColor: 'bg-yellow-100', textColor: 'text-yellow-800' },
+  HIGH: { bgColor: 'bg-orange-100', textColor: 'text-orange-800' },
+  CRITICAL: { bgColor: 'bg-red-100', textColor: 'text-red-800' },
 };
 
 const sizeConfig = {
@@ -19,13 +20,14 @@ const sizeConfig = {
 };
 
 export default function RiskBadge({ level, size = 'md' }: RiskBadgeProps) {
-  const { label, bgColor, textColor } = levelConfig[level];
+  const { t } = useTranslation();
+  const { bgColor, textColor } = styleConfig[level];
 
   return (
     <span
       className={`inline-flex items-center font-medium rounded-full ${bgColor} ${textColor} ${sizeConfig[size]}`}
     >
-      {label}
+      {t(`riskLevel.${level}`)}
     </span>
   );
 }
