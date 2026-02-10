@@ -185,9 +185,9 @@ export default function DashboardPage() {
                   </td>
                   <td className="px-6 py-4 text-center">
                     <span className={`text-sm font-medium ${
-                      (airport as any).weather_score >= 50 ? 'text-orange-600' : 'text-slate-600'
+                      (airport.weather_score ?? 0) >= 50 ? 'text-orange-600' : 'text-slate-600'
                     }`}>
-                      {(airport as any).weather_score?.toFixed(1) ?? '-'}
+                      {airport.weather_score?.toFixed(1) ?? '-'}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-center">

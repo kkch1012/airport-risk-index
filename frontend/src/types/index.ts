@@ -27,6 +27,8 @@ export interface AirportRiskSummary {
   name: string;
   score: number;
   level: RiskLevel;
+  weather_score?: number;
+  operational_score?: number;
 }
 
 // 대시보드 데이터
@@ -41,6 +43,13 @@ export interface DashboardData {
   alerts: Alert[];
 }
 
+// 데이터 소스 정보
+export interface DataSourceInfo {
+  weather: string;
+  others: string;
+  [key: string]: string;
+}
+
 // 공항 상세 위험지수
 export interface AirportRiskDetail {
   airport: {
@@ -52,6 +61,7 @@ export interface AirportRiskDetail {
   risk_level: RiskLevel;
   categories: Record<CategoryCode, CategoryScore>;
   updated_at: string;
+  data_source?: DataSourceInfo;
 }
 
 // 알림

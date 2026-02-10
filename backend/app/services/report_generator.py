@@ -53,15 +53,25 @@ class ReportGenerator:
         result = await self.session.execute(stmt)
         assessments = result.scalars().all()
 
+        if not assessments:
+            return []
+
+        # N+1 방지: 모든 assessment_id에 대한 카테고리 점수를 한 번에 조회
+        assessment_ids = [a.id for a in assessments]
+        cat_stmt = select(CategoryScoreRecord).where(
+            CategoryScoreRecord.assessment_id.in_(assessment_ids)
+        )
+        cat_result = await self.session.execute(cat_stmt)
+        all_cats = cat_result.scalars().all()
+
+        # assessment_id별로 그룹핑
+        cats_by_assessment: Dict[int, Dict[str, float]] = {}
+        for c in all_cats:
+            cats_by_assessment.setdefault(c.assessment_id, {})[c.category_code] = c.score
+
         rows = []
         for a in assessments:
-            # 카테고리 점수 조회
-            cat_stmt = select(CategoryScoreRecord).where(
-                CategoryScoreRecord.assessment_id == a.id
-            )
-            cat_result = await self.session.execute(cat_stmt)
-            cats = {c.category_code: c.score for c in cat_result.scalars().all()}
-
+            cats = cats_by_assessment.get(a.id, {})
             rows.append({
                 "airport_code": a.airport_code,
                 "airport_name": a.airport_name,

@@ -1,6 +1,5 @@
 import { useState } from 'react';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
+import api from '@/services/api';
 
 interface ExportButtonsProps {
   airportCode?: string;
@@ -19,7 +18,7 @@ export default function ExportButtons({ airportCode }: ExportButtonsProps) {
     setLoading(format);
     try {
       const params = airportCode ? `?airport_code=${airportCode}` : '';
-      const url = `${API_BASE_URL}/reports/${format}${params}`;
+      const url = `${api.defaults.baseURL}/reports/${format}${params}`;
 
       const response = await fetch(url);
       if (!response.ok) throw new Error('Download failed');

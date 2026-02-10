@@ -92,7 +92,7 @@ export default function AlertList({ alerts }: AlertListProps) {
 
           return (
             <div
-              key={idx}
+              key={`${alert.airport}-${alert.type}-${idx}`}
               className={`${config.bg} ${config.border} border rounded-lg p-3 flex items-start space-x-3 transition-all ${
                 config.pulse ? 'animate-pulse-slow' : ''
               }`}

@@ -358,7 +358,7 @@ class AviationSafetyCollector(BaseCollector):
                     date_obj = datetime.strptime(occ_date.replace("-", "/"), "%Y/%m/%d")
                     if (datetime.now() - date_obj).days <= 90:
                         recent_accidents.append(data)
-            except:
+            except (ValueError, TypeError):
                 pass
 
         return {

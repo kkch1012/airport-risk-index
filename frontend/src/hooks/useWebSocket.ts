@@ -39,6 +39,18 @@ export function useWebSocket({
     return `${host}${url}`;
   }, [url]);
 
+  const connectRef = useRef<() => void>();
+
+  const scheduleReconnect = useCallback(() => {
+    const attempt = reconnectAttemptRef.current;
+    const delay = Math.min(1000 * Math.pow(2, attempt), maxReconnectDelay);
+    reconnectAttemptRef.current = attempt + 1;
+
+    reconnectTimerRef.current = setTimeout(() => {
+      connectRef.current?.();
+    }, delay);
+  }, [maxReconnectDelay]);
+
   const connect = useCallback(() => {
     // 이미 연결 중이면 무시
     if (wsRef.current?.readyState === WebSocket.OPEN ||
@@ -79,17 +91,9 @@ export function useWebSocket({
       setStatus('disconnected');
       scheduleReconnect();
     }
-  }, [getWsUrl]);
+  }, [getWsUrl, scheduleReconnect]);
 
-  const scheduleReconnect = useCallback(() => {
-    const attempt = reconnectAttemptRef.current;
-    const delay = Math.min(1000 * Math.pow(2, attempt), maxReconnectDelay);
-    reconnectAttemptRef.current = attempt + 1;
-
-    reconnectTimerRef.current = setTimeout(() => {
-      connect();
-    }, delay);
-  }, [connect, maxReconnectDelay]);
+  connectRef.current = connect;
 
   const disconnect = useCallback(() => {
     if (reconnectTimerRef.current) {

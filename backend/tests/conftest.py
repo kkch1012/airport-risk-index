@@ -2,6 +2,11 @@
 pytest 설정 및 공통 fixture
 """
 
+import os
+
+# 테스트 시 SQLite 사용 강제 (asyncpg 불필요)
+os.environ.setdefault("USE_SQLITE", "true")
+
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient

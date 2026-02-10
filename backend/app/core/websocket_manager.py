@@ -88,13 +88,16 @@ class ConnectionManager:
             except Exception:
                 dead.append(ws)
 
-        # 끊어진 연결 정리
-        for ws in dead:
-            for channel, conns in list(self._connections.items()):
-                if ws in conns:
-                    conns.remove(ws)
-                    if not conns:
-                        del self._connections[channel]
+        # 끊어진 연결 정리 (dict 복사본으로 안전하게 순회)
+        if dead:
+            dead_set = set(dead)
+            for channel in list(self._connections.keys()):
+                conns = self._connections.get(channel)
+                if conns is None:
+                    continue
+                self._connections[channel] = [c for c in conns if c not in dead_set]
+                if not self._connections[channel]:
+                    del self._connections[channel]
 
 
 # 싱글톤 인스턴스

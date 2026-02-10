@@ -42,6 +42,7 @@ export function useRiskUpdates({ airportCode, enabled = true }: UseRiskUpdatesOp
 
   const handleMessage = useCallback(
     (raw: unknown) => {
+      if (typeof raw !== 'object' || raw === null || !('type' in raw)) return;
       const msg = raw as WSRiskUpdate;
 
       if (msg.type === 'risk_update' && msg.data?.airports) {
