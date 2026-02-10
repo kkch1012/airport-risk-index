@@ -60,6 +60,7 @@ export interface Alert {
   type: string;
   message: string;
   severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  created_at?: string;
 }
 
 // 트렌드 데이터

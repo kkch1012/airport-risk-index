@@ -63,11 +63,15 @@ class NewsCrawler(BaseCollector):
         """Google News RSS에서 뉴스 수집"""
         all_articles = []
         seen_ids = set()
+        cutoff = datetime.now() - timedelta(days=7)
 
         for query in SEARCH_QUERIES:
             try:
                 articles = await self._fetch_rss(query)
                 for article in articles:
+                    # 7일 이상 된 기사 필터링
+                    if self._is_article_too_old(article, cutoff):
+                        continue
                     article_id = self._generate_id(article)
                     if article_id not in seen_ids:
                         seen_ids.add(article_id)
@@ -81,12 +85,37 @@ class NewsCrawler(BaseCollector):
             self.logger.warning("뉴스 수집 실패, 목업 사용")
             return self._get_mock_data()
 
-        self.logger.info("뉴스 %d건 수집 (중복 제거 후)", len(all_articles))
+        self.logger.info("뉴스 %d건 수집 (중복 제거 + 날짜 필터 후)", len(all_articles))
         return all_articles
+
+    def _is_article_too_old(self, article: Dict[str, Any], cutoff: datetime) -> bool:
+        """기사 날짜가 cutoff 이전인지 확인"""
+        pub_date = article.get("published_at", "")
+        if not pub_date:
+            return False  # 날짜 없으면 일단 포함
+
+        for fmt in [
+            "%a, %d %b %Y %H:%M:%S %Z",
+            "%a, %d %b %Y %H:%M:%S %z",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S%z",
+        ]:
+            try:
+                dt = datetime.strptime(pub_date.strip(), fmt)
+                # timezone-aware → naive 변환 비교
+                if dt.tzinfo is not None:
+                    dt = dt.replace(tzinfo=None)
+                return dt < cutoff
+            except ValueError:
+                continue
+
+        return False  # 파싱 실패 시 일단 포함
 
     async def _fetch_rss(self, query: str) -> List[Dict[str, Any]]:
         """Google News RSS 피드 가져오기"""
-        encoded_query = quote(query)
+        # 최근 7일 이내 뉴스만 검색하도록 when:7d 추가
+        query_with_date = f"{query} when:7d"
+        encoded_query = quote(query_with_date)
         url = f"{self.source_url}?q={encoded_query}&hl=ko&gl=KR&ceid=KR:ko"
 
         response = await self.client.get(

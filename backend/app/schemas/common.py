@@ -20,6 +20,7 @@ class AlertType(str, Enum):
     WEATHER = "WEATHER"
     SECURITY = "SECURITY"
     HEALTH = "HEALTH"
+    OPERATIONAL = "OPERATIONAL"
 
 
 class AlertSeverity(str, Enum):
@@ -75,3 +76,4 @@ class AlertSchema(BaseModel):
     type: str
     message: str
     severity: str
+    created_at: Optional[str] = None

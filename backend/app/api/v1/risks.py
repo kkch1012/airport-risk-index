@@ -177,44 +177,116 @@ async def get_dashboard():
     high_risk_count = sum(1 for a in airport_data if a["level"] in ["HIGH", "CRITICAL"])
     avg_score = sum(a["score"] for a in airport_data) / len(airport_data)
 
-    # 알림 생성 (기상 + 여행경보)
+    # 알림 생성 (기상 + 여행경보 + 보건 + 운영)
+    now = datetime.now()
     alerts = []
 
-    # 기상 관련 알림
+    # 기상 관련 알림 — 구체적 기상 정보 포함
     for airport in airport_data:
         if airport["weather_score"] >= 50:
+            weather_detail = weather_map.get(airport["code"], {})
+            msg_parts = []
+            wind = weather_detail.get("wind_speed")
+            precip = weather_detail.get("precipitation")
+            humidity = weather_detail.get("humidity")
+            precip_type = weather_detail.get("precipitation_type", 0)
+
+            precip_labels = {1: "비", 2: "비/눈", 3: "눈", 5: "빗방울", 7: "눈날림"}
+
+            if wind and wind >= 10:
+                msg_parts.append(f"강풍 {wind:.1f}m/s")
+            if precip and precip > 0:
+                label = precip_labels.get(precip_type, "강수")
+                msg_parts.append(f"{label} {precip:.1f}mm")
+            if humidity and humidity >= 85:
+                msg_parts.append(f"습도 {humidity}%")
+
+            if msg_parts:
+                message = f"{airport['name']} {', '.join(msg_parts)} (위험도 {airport['weather_score']:.0f})"
+            else:
+                score = airport["weather_score"]
+                if score >= 70:
+                    message = f"{airport['name']} 기상 악화 경고 (위험도 {score:.0f})"
+                else:
+                    message = f"{airport['name']} 기상 주의보 발령 (위험도 {score:.0f})"
+
             alerts.append({
                 "airport": airport["code"],
                 "type": "WEATHER",
-                "message": f"기상 위험지수 높음 ({airport['weather_score']:.1f})",
-                "severity": "WARNING" if airport["weather_score"] < 70 else "CRITICAL"
+                "message": message,
+                "severity": "WARNING" if airport["weather_score"] < 70 else "CRITICAL",
+                "created_at": now.isoformat(),
             })
 
-    # 여행경보 관련 알림
+    # 여행경보 관련 알림 — 경보 단계 및 지역 정보 포함
     high_risk_advisories = [
         d for d in travel_advisory_data
         if d.get("alarm_level", 0) >= 3
     ]
-    for advisory in high_risk_advisories[:3]:  # 최대 3개
+    # 높은 경보 우선
+    high_risk_advisories.sort(key=lambda x: x.get("alarm_level", 0), reverse=True)
+    for advisory in high_risk_advisories[:3]:
+        level = advisory.get("alarm_level", 3)
+        country = advisory["country_name"]
+        alarm_name = advisory.get("alarm_name", "")
+        region = advisory.get("region_type", "전지역")
+
+        if level >= 4:
+            message = f"[{alarm_name}] {country} ({region}) — 즉시 대피 권고"
+        else:
+            message = f"[{alarm_name}] {country} ({region}) — 출국 자제 권고"
+
         alerts.append({
             "airport": "국제선",
             "type": "SECURITY",
-            "message": f"{advisory['country_name']} {advisory['alarm_name']}",
-            "severity": "CRITICAL" if advisory.get("alarm_level", 0) >= 4 else "WARNING"
+            "message": message,
+            "severity": "CRITICAL" if level >= 4 else "WARNING",
+            "created_at": now.isoformat(),
         })
 
-    # 보건위험 관련 알림
+    # 보건위험 관련 알림 — 질병명 및 위험도 포함
     high_risk_health = [
         d for d in health_data
         if d.get("risk_score", 0) >= 70
     ]
-    for health_item in high_risk_health[:2]:  # 최대 2개
+    high_risk_health.sort(key=lambda x: x.get("risk_score", 0), reverse=True)
+    for health_item in high_risk_health[:2]:
+        country = health_item.get("country_name", "")
+        disease = health_item.get("disease_name", "")
+        score = health_item.get("risk_score", 0)
+
+        if score >= 85:
+            message = f"검역 강화: {country} {disease} 확산 중 — 입국자 전수검사"
+        else:
+            message = f"검역 주의: {country} {disease} 감시 강화 (위험도 {score:.0f})"
+
         alerts.append({
             "airport": "검역",
             "type": "HEALTH",
-            "message": f"{health_item.get('country_name', '')} {health_item.get('disease_name', '')} 경보",
-            "severity": "CRITICAL" if health_item.get("risk_score", 0) >= 85 else "WARNING"
+            "message": message,
+            "severity": "CRITICAL" if score >= 85 else "WARNING",
+            "created_at": now.isoformat(),
         })
+
+    # 운영위험 알림 — 지연/결항 높은 공항
+    for airport in airport_data:
+        op_score = airport.get("operational_score", 0)
+        if op_score >= 55:
+            if op_score >= 70:
+                message = f"{airport['name']} 운항 지연 다수 발생 중 (운영위험 {op_score:.0f})"
+            else:
+                message = f"{airport['name']} 일부 항공편 지연 (운영위험 {op_score:.0f})"
+            alerts.append({
+                "airport": airport["code"],
+                "type": "OPERATIONAL",
+                "message": message,
+                "severity": "WARNING" if op_score < 70 else "CRITICAL",
+                "created_at": now.isoformat(),
+            })
+
+    # 심각도 우선 정렬 (CRITICAL > WARNING > INFO)
+    severity_order = {"CRITICAL": 0, "WARNING": 1, "INFO": 2}
+    alerts.sort(key=lambda x: severity_order.get(x["severity"], 9))
 
     return {
         "summary": {

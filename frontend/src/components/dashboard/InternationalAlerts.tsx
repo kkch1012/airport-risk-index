@@ -3,6 +3,7 @@ import api from '@/services/api';
 
 interface InternationalIncident {
   title: string;
+  link: string;
   incident_date: string;
   country_code: string;
   severity: string;
@@ -80,15 +81,21 @@ export default function InternationalAlerts() {
         <div className="space-y-2">
           <div className="text-xs font-medium text-slate-500 uppercase">최근 해외 사고</div>
           {data.incidents.recent.slice(0, 3).map((item, idx) => (
-            <div key={idx} className="flex items-start justify-between py-2 border-b border-slate-100 last:border-0">
+            <a
+              key={idx}
+              href={item.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-start justify-between py-2 border-b border-slate-100 last:border-0 group cursor-pointer hover:bg-slate-50 -mx-2 px-2 rounded transition-colors"
+            >
               <div className="flex-1 min-w-0">
-                <div className="text-sm text-slate-700 truncate">{item.title}</div>
+                <div className="text-sm text-slate-700 group-hover:text-blue-600 truncate transition-colors">{item.title}</div>
                 <div className="text-xs text-slate-400">{item.incident_date} | {item.country_code}</div>
               </div>
-              <span className={`ml-2 text-xs px-2 py-0.5 rounded ${severityColor[item.severity] || 'bg-slate-100 text-slate-600'}`}>
+              <span className={`ml-2 text-xs px-2 py-0.5 rounded flex-shrink-0 ${severityColor[item.severity] || 'bg-slate-100 text-slate-600'}`}>
                 {item.severity}
               </span>
-            </div>
+            </a>
           ))}
         </div>
       )}
