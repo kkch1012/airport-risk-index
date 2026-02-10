@@ -1,7 +1,11 @@
 import axios from 'axios';
-import type { DashboardData, AirportRiskDetail, Airport, TrendData, CorrelationData } from '@/types';
+import type {
+  DashboardData, AirportRiskDetail, Airport, TrendData, CorrelationData,
+  LoginRequest, TokenResponse, AuthUser,
+} from '@/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
+const STORAGE_KEY = 'auth-storage';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -9,6 +13,33 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// Request 인터셉터: Bearer 토큰 주입 (localStorage 직접 읽기 — 순환 의존성 방지)
+api.interceptors.request.use((config) => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const { token } = JSON.parse(raw);
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    }
+  } catch {
+    // localStorage 접근 실패 시 무시
+  }
+  return config;
+});
+
+// Response 인터셉터: 401 시 인증 상태 초기화
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+    return Promise.reject(error);
+  },
+);
 
 // 대시보드 데이터 조회
 export const fetchDashboard = async (): Promise<DashboardData> => {
@@ -100,6 +131,18 @@ export const fetchCorrelationMatrix = async (): Promise<{
   matrix: number[][];
 }> => {
   const { data } = await api.get('/analytics/correlation-matrix');
+  return data;
+};
+
+// 로그인
+export const loginAPI = async (credentials: LoginRequest): Promise<TokenResponse> => {
+  const { data } = await api.post('/auth/login', credentials);
+  return data;
+};
+
+// 내 정보 조회
+export const fetchMe = async (): Promise<AuthUser> => {
+  const { data } = await api.get('/auth/me');
   return data;
 };
 

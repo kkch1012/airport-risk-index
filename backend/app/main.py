@@ -11,6 +11,12 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.api.v1.router import api_router
+from app.api.v1.metrics import router as metrics_router
+from app.core.logging_config import setup_logging
+from app.core.middleware import RequestTimingMiddleware
+
+# 구조화 로깅 초기화 (stdlib root logger 래핑)
+setup_logging(env=settings.ENV)
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +68,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 요청 타이밍 + 접근 로그 미들웨어
+app.add_middleware(RequestTimingMiddleware)
+
 # API 라우터 등록
 app.include_router(api_router, prefix="/api/v1")
+
+# Prometheus 메트릭 (루트 레벨)
+app.include_router(metrics_router)
 
 
 @app.get("/")

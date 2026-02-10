@@ -1,4 +1,5 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuthStore } from '@/stores/authStore';
 
 const navigation = [
   { name: '대시보드', path: '/' },
@@ -7,6 +8,13 @@ const navigation = [
 
 export default function Layout() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { isAuthenticated, user, logout } = useAuthStore();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -39,9 +47,26 @@ export default function Layout() {
               ))}
             </nav>
 
-            {/* 업데이트 시간 */}
-            <div className="text-sm text-slate-500">
-              마지막 업데이트: {new Date().toLocaleTimeString('ko-KR')}
+            {/* 인증 상태 */}
+            <div className="flex items-center gap-3">
+              {isAuthenticated && user ? (
+                <>
+                  <span className="text-sm text-slate-600">{user.username}</span>
+                  <button
+                    onClick={handleLogout}
+                    className="text-sm text-slate-500 hover:text-slate-700 transition-colors"
+                  >
+                    로그아웃
+                  </button>
+                </>
+              ) : (
+                <Link
+                  to="/login"
+                  className="text-sm text-blue-600 hover:text-blue-800 transition-colors"
+                >
+                  로그인
+                </Link>
+              )}
             </div>
           </div>
         </div>

@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '@/services/api';
+import { useAuthStore } from '@/stores/authStore';
 
 interface ExportButtonsProps {
   airportCode?: string;
@@ -13,22 +15,24 @@ const FORMATS = [
 
 export default function ExportButtons({ airportCode }: ExportButtonsProps) {
   const [loading, setLoading] = useState<string | null>(null);
+  const { isAuthenticated } = useAuthStore();
 
   const handleDownload = async (format: string) => {
+    if (!isAuthenticated) return;
     setLoading(format);
     try {
-      const params = airportCode ? `?airport_code=${airportCode}` : '';
-      const url = `${api.defaults.baseURL}/reports/${format}${params}`;
+      const params = airportCode ? { airport_code: airportCode } : {};
+      const response = await api.get(`/reports/${format}`, {
+        params,
+        responseType: 'blob',
+      });
 
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('Download failed');
-
-      const blob = await response.blob();
+      const blob = new Blob([response.data]);
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;
 
-      const contentDisposition = response.headers.get('Content-Disposition');
+      const contentDisposition = response.headers['content-disposition'];
       const filenameMatch = contentDisposition?.match(/filename="?([^"]+)"?/);
       a.download = filenameMatch?.[1] || `report.${format === 'excel' ? 'xlsx' : format}`;
 
@@ -42,6 +46,20 @@ export default function ExportButtons({ airportCode }: ExportButtonsProps) {
       setLoading(null);
     }
   };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-slate-400 mr-1">내보내기</span>
+        <Link
+          to="/login"
+          className="text-xs text-blue-600 hover:text-blue-800 hover:underline"
+        >
+          로그인 후 이용 가능
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2">

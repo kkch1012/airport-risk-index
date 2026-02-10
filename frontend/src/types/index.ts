@@ -114,3 +114,22 @@ export interface CorrelationMatrixData {
   categories: string[];
   matrix: number[][];
 }
+
+// 인증 관련 타입
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+}
+
+export interface AuthUser {
+  id: number;
+  email: string;
+  username: string;
+  is_active: boolean;
+  is_admin: boolean;
+}
