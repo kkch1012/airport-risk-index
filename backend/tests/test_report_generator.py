@@ -138,6 +138,21 @@ class TestPDFReport:
 
 # ─── API 엔드포인트 테스트 ──────────────────────
 
+def _get_auth_header(client):
+    """테스트용 JWT 토큰 발급 헬퍼"""
+    client.post("/api/v1/auth/register", json={
+        "email": "reporttest@example.com",
+        "username": "reporttest",
+        "password": "password123",
+    })
+    resp = client.post("/api/v1/auth/login", json={
+        "username": "reporttest",
+        "password": "password123",
+    })
+    token = resp.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
 class TestReportAPI:
 
     def test_csv_endpoint(self):
@@ -145,7 +160,8 @@ class TestReportAPI:
         from app.main import app
 
         client = TestClient(app)
-        resp = client.get("/api/v1/reports/csv")
+        headers = _get_auth_header(client)
+        resp = client.get("/api/v1/reports/csv", headers=headers)
         assert resp.status_code == 200
         assert "text/csv" in resp.headers.get("content-type", "")
 
@@ -154,7 +170,8 @@ class TestReportAPI:
         from app.main import app
 
         client = TestClient(app)
-        resp = client.get("/api/v1/reports/excel")
+        headers = _get_auth_header(client)
+        resp = client.get("/api/v1/reports/excel", headers=headers)
         assert resp.status_code == 200
         assert "spreadsheet" in resp.headers.get("content-type", "")
 
@@ -163,7 +180,8 @@ class TestReportAPI:
         from app.main import app
 
         client = TestClient(app)
-        resp = client.get("/api/v1/reports/pdf")
+        headers = _get_auth_header(client)
+        resp = client.get("/api/v1/reports/pdf", headers=headers)
         assert resp.status_code == 200
         assert "pdf" in resp.headers.get("content-type", "")
 
@@ -172,7 +190,8 @@ class TestReportAPI:
         from app.main import app
 
         client = TestClient(app)
-        resp = client.get("/api/v1/reports/csv?airport_code=ICN")
+        headers = _get_auth_header(client)
+        resp = client.get("/api/v1/reports/csv?airport_code=ICN", headers=headers)
         assert resp.status_code == 200
 
     def test_content_disposition_header(self):
@@ -180,7 +199,8 @@ class TestReportAPI:
         from app.main import app
 
         client = TestClient(app)
-        resp = client.get("/api/v1/reports/csv")
+        headers = _get_auth_header(client)
+        resp = client.get("/api/v1/reports/csv", headers=headers)
         assert "content-disposition" in resp.headers
         assert "risk_report" in resp.headers["content-disposition"]
 

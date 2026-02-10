@@ -22,6 +22,7 @@ config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC)
 # ORM 모델 메타데이터 (자동 마이그레이션 감지용)
 from app.core.database import Base
 import app.models.risk_history  # noqa: F401
+import app.models.user  # noqa: F401
 
 target_metadata = Base.metadata
 

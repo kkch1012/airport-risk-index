@@ -10,6 +10,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.auth_dependencies import get_current_user
+from app.models.user import User
 from app.services.report_generator import ReportGenerator
 
 router = APIRouter()
@@ -19,6 +21,7 @@ router = APIRouter()
 async def download_csv(
     airport_code: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
 ):
     """CSV 리포트 다운로드"""
     generator = ReportGenerator(db)
@@ -36,6 +39,7 @@ async def download_csv(
 async def download_excel(
     airport_code: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
 ):
     """Excel 리포트 다운로드"""
     generator = ReportGenerator(db)
@@ -53,6 +57,7 @@ async def download_excel(
 async def download_pdf(
     airport_code: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
 ):
     """PDF 리포트 다운로드"""
     generator = ReportGenerator(db)
