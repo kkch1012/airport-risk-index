@@ -20,7 +20,9 @@ from app.schemas.analytics import (
     TrendResponse,
     WeightsResponse,
 )
+from app.schemas.forecast import AirportForecastResponse
 from app.services.analytics_service import AnalyticsService
+from app.services.forecast_service import ForecastService
 from app.services.weight_service import WeightService
 
 router = APIRouter()
@@ -275,3 +277,38 @@ async def get_statistics(db: AsyncSession = Depends(get_db)):
         "by_airport": by_airport,
         "updated_at": datetime.now().isoformat(),
     }
+
+
+@router.get("/forecast", response_model=AirportForecastResponse)
+async def get_forecast(
+    airport_code: str,
+    category: Optional[str] = None,
+    horizon: int = 7,
+    db: AsyncSession = Depends(get_db),
+):
+    """공항 위험지수 예측 (시계열 forecasting)"""
+    horizon = max(1, min(horizon, 14))
+
+    service = ForecastService(db)
+    result = await service.forecast_airport(
+        airport_code=airport_code,
+        horizon=horizon,
+        category=category,
+    )
+
+    if result is None:
+        return {
+            "airport_code": airport_code,
+            "category": category or "total",
+            "horizon": horizon,
+            "last_observed": None,
+            "predictions": [],
+            "metrics": {
+                "mae": 0,
+                "rmse": 0,
+                "method": "none",
+                "data_points_used": 0,
+            },
+        }
+
+    return result

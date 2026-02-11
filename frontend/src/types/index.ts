@@ -133,3 +133,27 @@ export interface AuthUser {
   is_active: boolean;
   is_admin: boolean;
 }
+
+// 예측 관련 타입
+export interface ForecastPoint {
+  date: string;
+  value: number;
+  lower_ci: number;
+  upper_ci: number;
+}
+
+export interface ForecastMetrics {
+  mae: number;
+  rmse: number;
+  method: string;
+  data_points_used: number;
+}
+
+export interface AirportForecastResponse {
+  airport_code: string;
+  category: string;
+  horizon: number;
+  last_observed: ForecastPoint | null;
+  predictions: ForecastPoint[];
+  metrics: ForecastMetrics;
+}

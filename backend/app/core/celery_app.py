@@ -54,4 +54,9 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=3, minute=0, day_of_week=1),  # 매주 월요일 03:00
         "options": {"expires": 60 * 60},
     },
+    "generate-forecasts-daily": {
+        "task": "app.tasks.collect_risks.generate_daily_forecasts",
+        "schedule": crontab(hour=4, minute=0),  # 매일 04:00
+        "options": {"expires": 60 * 60},
+    },
 }

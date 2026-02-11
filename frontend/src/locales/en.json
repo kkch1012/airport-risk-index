@@ -171,6 +171,21 @@
     "period6M": "6M",
     "totalRiskIndex": "Total Risk Index"
   },
+  "forecast": {
+    "showForecast": "Show Forecast",
+    "hideForecast": "Hide Forecast",
+    "forecastLabel": "Forecast",
+    "actualLabel": "Actual",
+    "confidenceInterval": "95% CI",
+    "method": "Model",
+    "mae": "MAE",
+    "dataPoints": "Data",
+    "days": "{{count}}d",
+    "insufficientData": "Insufficient data for forecast",
+    "holtLinear": "Holt Linear",
+    "linearFallback": "Linear Regression",
+    "none": "None"
+  },
   "correlation": {
     "title": "Category Correlation",
     "noData": "Insufficient data (minimum 30 days of history required)",

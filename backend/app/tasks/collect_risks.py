@@ -9,6 +9,7 @@ from app.core.constants import AIRPORT_NAMES
 from app.services.risk_calculator import RiskCalculator
 from app.services.risk_history_service import RiskHistoryService
 from app.services.alert_service import AlertService
+from app.services.forecast_service import ForecastService
 from app.services.weight_service import WeightService
 from app.core.database import AsyncSessionLocal
 from app.tasks.utils import (
@@ -306,4 +307,32 @@ def recalculate_weights(self):
         return result
     except Exception as exc:
         logger.exception("[Task] recalculate_weights failed")
+        raise self.retry(exc=exc)
+
+
+async def _generate_forecasts():
+    """전체 공항 예측 생성 (async)"""
+    async with AsyncSessionLocal() as session:
+        service = ForecastService(session)
+        results = await service.forecast_all_airports(horizon=7)
+
+    logger.info("Generated forecasts for %d airports", len(results))
+    return {"airports_forecasted": len(results)}
+
+
+@celery_app.task(
+    name="app.tasks.collect_risks.generate_daily_forecasts",
+    bind=True,
+    max_retries=1,
+    default_retry_delay=300,
+)
+def generate_daily_forecasts(self):
+    """일일 예측 생성"""
+    logger.info("[Task] generate_daily_forecasts started")
+    try:
+        result = run_async(_generate_forecasts())
+        logger.info("[Task] generate_daily_forecasts completed: %s", result)
+        return result
+    except Exception as exc:
+        logger.exception("[Task] generate_daily_forecasts failed")
         raise self.retry(exc=exc)

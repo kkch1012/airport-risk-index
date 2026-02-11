@@ -171,6 +171,21 @@
     "period6M": "6개월",
     "totalRiskIndex": "종합 위험지수"
   },
+  "forecast": {
+    "showForecast": "예측 표시",
+    "hideForecast": "예측 숨기기",
+    "forecastLabel": "예측",
+    "actualLabel": "실측",
+    "confidenceInterval": "95% 신뢰구간",
+    "method": "모델",
+    "mae": "MAE",
+    "dataPoints": "데이터",
+    "days": "{{count}}일",
+    "insufficientData": "예측 데이터 부족",
+    "holtLinear": "이중지수평활",
+    "linearFallback": "선형회귀",
+    "none": "없음"
+  },
   "correlation": {
     "title": "카테고리 상관관계",
     "noData": "데이터가 부족합니다 (최소 30일 이력 필요)",

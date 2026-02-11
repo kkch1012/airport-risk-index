@@ -1,7 +1,7 @@
 import axios from 'axios';
 import type {
   DashboardData, AirportRiskDetail, Airport, TrendData, CorrelationData,
-  LoginRequest, TokenResponse, AuthUser,
+  LoginRequest, TokenResponse, AuthUser, AirportForecastResponse,
 } from '@/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
@@ -131,6 +131,18 @@ export const fetchCorrelationMatrix = async (): Promise<{
   matrix: number[][];
 }> => {
   const { data } = await api.get('/analytics/correlation-matrix');
+  return data;
+};
+
+// 예측 데이터 조회
+export const fetchForecast = async (
+  airportCode: string,
+  category?: string,
+  horizon?: number
+): Promise<AirportForecastResponse> => {
+  const { data } = await api.get('/analytics/forecast', {
+    params: { airport_code: airportCode, category, horizon },
+  });
   return data;
 };
 
