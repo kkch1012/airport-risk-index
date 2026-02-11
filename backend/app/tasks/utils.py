@@ -11,6 +11,7 @@ from app.collectors.travel_advisory import TravelAdvisoryCollector
 from app.collectors.health_risk import HealthRiskCollector
 from app.collectors.flight_status import FlightStatusCollector
 from app.collectors.aviation_safety import AviationSafetyCollector
+from app.collectors.security_threat import SecurityThreatCollector
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,16 @@ async def collect_aviation() -> Tuple[List[Dict], bool]:
         logger.warning("Aviation safety collection failed: %s", result.get("error"))
         return [], False
     return result["data"], collector.can_crawl
+
+
+async def collect_security() -> Tuple[List[Dict], bool]:
+    """보안위협 데이터 수집"""
+    async with SecurityThreatCollector() as collector:
+        result = await collector.run()
+    if result["status"] != "success":
+        logger.warning("Security threat collection failed: %s", result.get("error"))
+        return [], False
+    return result["data"], bool(collector.api_key)
 
 
 async def collect_international_weather() -> List[Dict]:

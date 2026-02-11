@@ -19,6 +19,7 @@ from app.tasks.utils import (
     collect_health,
     collect_operational,
     collect_aviation,
+    collect_security,
     collect_international_weather,
     collect_international_aviation,
 )
@@ -46,17 +47,19 @@ async def _collect_and_calculate():
     health_data, _ = await collect_health()
     operational_data, _ = await collect_operational()
     aviation_data, _ = await collect_aviation()
+    security_data, _ = await collect_security()
     intl_weather_data = await collect_international_weather()
     intl_aviation_data = await collect_international_aviation()
 
     logger.info(
         "Collection complete — weather: %d airports, advisory: %d, health: %d, "
-        "operational: %d, aviation: %d, intl_weather: %d, intl_aviation: %d",
+        "operational: %d, aviation: %d, security: %d, intl_weather: %d, intl_aviation: %d",
         len(weather_map),
         len(travel_advisory_data),
         len(health_data),
         len(operational_data),
         len(aviation_data),
+        len(security_data),
         len(intl_weather_data),
         len(intl_aviation_data),
     )
@@ -74,6 +77,7 @@ async def _collect_and_calculate():
             aviation_data=aviation_data,
             international_weather_data=intl_weather_data,
             international_aviation_data=intl_aviation_data,
+            security_data=security_data,
         )
         risk_results.append(risk_result)
 
@@ -200,6 +204,7 @@ async def _send_daily_report():
     health_data, _ = await collect_health()
     operational_data, _ = await collect_operational()
     aviation_data, _ = await collect_aviation()
+    security_data, _ = await collect_security()
 
     risk_results = []
     for code, name in AIRPORT_NAMES.items():
@@ -211,6 +216,7 @@ async def _send_daily_report():
             health_data=health_data,
             operational_data=operational_data,
             aviation_data=aviation_data,
+            security_data=security_data,
         )
         risk_results.append(risk_result)
 

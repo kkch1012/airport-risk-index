@@ -571,6 +571,92 @@ class RiskCalculator:
             factors=factors
         )
 
+    def calculate_security_score(
+        self,
+        airport_code: str,
+        security_data: List[Dict[str, Any]]
+    ) -> CategoryScore:
+        """
+        보안위협 점수 계산 (뉴스 키워드 + 밀수 + 불법입국 데이터 기반)
+
+        Args:
+            airport_code: 공항 코드
+            security_data: 보안위협 수집 데이터 리스트
+
+        Returns:
+            CategoryScore: 보안위협 점수
+        """
+        factors = {
+            "terror_threat": 0.0,   # 테러/위협 (0-40)
+            "smuggling": 0.0,       # 밀수 (0-30)
+            "illegal_entry": 0.0,   # 불법입국 (0-30)
+        }
+
+        if not security_data:
+            return CategoryScore(
+                code="security",
+                name="보안위협",
+                score=5.0,
+                level="LOW",
+                factors=factors
+            )
+
+        # 공항별 + 전체(공항 미지정) 데이터 분리
+        airport_events = [
+            d for d in security_data
+            if d.get("airport_code") == airport_code or d.get("airport_code") is None
+        ]
+
+        # 유형별 점수 집계
+        terror_scores = []
+        smuggling_scores = []
+        illegal_scores = []
+
+        for event in airport_events:
+            threat_type = event.get("threat_type", "")
+            score = event.get("score", 0)
+
+            if threat_type == "terror":
+                terror_scores.append(score)
+            elif threat_type == "smuggling":
+                smuggling_scores.append(score)
+            elif threat_type == "illegal_entry":
+                illegal_scores.append(score)
+
+        # terror_threat: 최대값 60% + 평균 40%, 상한 40점
+        if terror_scores:
+            max_t = max(terror_scores)
+            avg_t = sum(terror_scores) / len(terror_scores)
+            factors["terror_threat"] = round(min(40, (max_t * 0.6 + avg_t * 0.4) * 0.4), 1)
+
+        # smuggling: 최대값 60% + 평균 40%, 상한 30점
+        if smuggling_scores:
+            max_s = max(smuggling_scores)
+            avg_s = sum(smuggling_scores) / len(smuggling_scores)
+            factors["smuggling"] = round(min(30, (max_s * 0.6 + avg_s * 0.4) * 0.3), 1)
+
+        # illegal_entry: 최대값 60% + 평균 40%, 상한 30점
+        if illegal_scores:
+            max_i = max(illegal_scores)
+            avg_i = sum(illegal_scores) / len(illegal_scores)
+            factors["illegal_entry"] = round(min(30, (max_i * 0.6 + avg_i * 0.4) * 0.3), 1)
+
+        # 최종 점수: 3개 요인 합산
+        final_score = (
+            factors["terror_threat"]
+            + factors["smuggling"]
+            + factors["illegal_entry"]
+        )
+        final_score = min(100, max(0, final_score))
+
+        return CategoryScore(
+            code="security",
+            name="보안위협",
+            score=round(final_score, 2),
+            level=self._get_risk_level(final_score),
+            factors=factors
+        )
+
     def calculate_mock_category_score(
         self,
         category_code: str,
@@ -635,6 +721,7 @@ class RiskCalculator:
         aviation_data: Optional[List[Dict[str, Any]]] = None,
         international_weather_data: Optional[List[Dict[str, Any]]] = None,
         international_aviation_data: Optional[List[Dict[str, Any]]] = None,
+        security_data: Optional[List[Dict[str, Any]]] = None,
     ) -> RiskResult:
         """
         종합 위험지수 계산
@@ -704,10 +791,15 @@ class RiskCalculator:
                 "aviation", "항공안전", seed
             )
 
-        # 6. 보안위협 (현재 목업, 추후 실제 데이터로 대체)
-        categories["security"] = self.calculate_mock_category_score(
-            "security", "보안위협", seed
-        )
+        # 6. 보안위협 (실제 데이터 또는 목업)
+        if security_data:
+            categories["security"] = self.calculate_security_score(
+                airport_code, security_data
+            )
+        else:
+            categories["security"] = self.calculate_mock_category_score(
+                "security", "보안위협", seed
+            )
 
         # 3. 종합 점수 계산 (가중 평균)
         total_score = 0
