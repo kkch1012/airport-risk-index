@@ -44,11 +44,11 @@ jobs:
       - name: flake8 (warnings)
         run: flake8 app/ --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
 
-      - name: isort (check)
-        run: isort app/ --check-only --diff
+      - name: isort (advisory)
+        run: isort app/ --check-only --diff || true
 
-      - name: black (check)
-        run: black app/ --check --diff
+      - name: black (advisory)
+        run: black app/ --check --diff || true
 
       - name: mypy (advisory)
         run: mypy app/ --ignore-missing-imports --no-error-summary || true

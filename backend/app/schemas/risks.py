@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.schemas.common import (
     AirportBase,
@@ -127,12 +127,19 @@ class TravelAdvisoryCountry(BaseModel):
     alarm_name: str
     alarm_color: str
     risk_score: float
-    is_partial_warning: bool
+    is_partial_warning: bool = False
     region_type: Optional[str] = ""
     remark: Optional[str] = ""
     written_date: Optional[str] = ""
     collected_at: str
     source: str
+
+    @field_validator("is_partial_warning", mode="before")
+    @classmethod
+    def parse_bool(cls, v):
+        if v == "" or v is None:
+            return False
+        return v
 
 
 class TravelAdvisoryResponse(BaseModel):
