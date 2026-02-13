@@ -3,8 +3,18 @@
 """
 
 import logging
+import time
 
 from app.core.celery_app import celery_app
+from app.core.metrics import (
+    risk_score_current,
+    risk_calculation_duration,
+    collector_runs_total,
+    collector_duration,
+    celery_tasks_total,
+    celery_task_duration,
+    alerts_sent_total,
+)
 from app.core.constants import AIRPORT_NAMES
 from app.services.risk_calculator import RiskCalculator
 from app.services.risk_history_service import RiskHistoryService
@@ -40,16 +50,36 @@ async def _collect_and_calculate():
 
     calculator = RiskCalculator(custom_weights=active_weights)
 
-    # 1. 데이터 수집
+    # 1. 데이터 수집 (메트릭 계측 포함)
     logger.info("Starting data collection for all sources")
-    weather_map = await collect_weather()
-    travel_advisory_data, _ = await collect_travel_advisory()
-    health_data, _ = await collect_health()
-    operational_data, _ = await collect_operational()
-    aviation_data, _ = await collect_aviation()
-    security_data, _ = await collect_security()
-    intl_weather_data = await collect_international_weather()
-    intl_aviation_data = await collect_international_aviation()
+
+    async def _timed_collect(name, coro):
+        """수집기 실행 시간/성공 여부를 Prometheus 메트릭으로 기록"""
+        start = time.perf_counter()
+        try:
+            result = await coro
+            elapsed = time.perf_counter() - start
+            if collector_duration is not None:
+                collector_duration.labels(collector=name).observe(elapsed)
+            if collector_runs_total is not None:
+                collector_runs_total.labels(collector=name, status="success").inc()
+            return result
+        except Exception:
+            elapsed = time.perf_counter() - start
+            if collector_duration is not None:
+                collector_duration.labels(collector=name).observe(elapsed)
+            if collector_runs_total is not None:
+                collector_runs_total.labels(collector=name, status="failure").inc()
+            raise
+
+    weather_map = await _timed_collect("weather", collect_weather())
+    travel_advisory_data, _ = await _timed_collect("travel_advisory", collect_travel_advisory())
+    health_data, _ = await _timed_collect("health", collect_health())
+    operational_data, _ = await _timed_collect("operational", collect_operational())
+    aviation_data, _ = await _timed_collect("aviation", collect_aviation())
+    security_data, _ = await _timed_collect("security", collect_security())
+    intl_weather_data = await _timed_collect("intl_weather", collect_international_weather())
+    intl_aviation_data = await _timed_collect("intl_aviation", collect_international_aviation())
 
     logger.info(
         "Collection complete — weather: %d airports, advisory: %d, health: %d, "
@@ -64,7 +94,8 @@ async def _collect_and_calculate():
         len(intl_aviation_data),
     )
 
-    # 2. 위험지수 계산
+    # 2. 위험지수 계산 (소요시간 메트릭)
+    calc_start = time.perf_counter()
     risk_results = []
     for code, name in AIRPORT_NAMES.items():
         risk_result = calculator.calculate_total_risk(
@@ -80,6 +111,15 @@ async def _collect_and_calculate():
             security_data=security_data,
         )
         risk_results.append(risk_result)
+
+    calc_elapsed = time.perf_counter() - calc_start
+    if risk_calculation_duration is not None:
+        risk_calculation_duration.observe(calc_elapsed)
+
+    # 공항별 현재 위험지수 Gauge 업데이트
+    if risk_score_current is not None:
+        for r in risk_results:
+            risk_score_current.labels(airport_code=r.airport_code).set(r.total_score)
 
     high_risk = [r for r in risk_results if r.risk_level in ("HIGH", "CRITICAL")]
     logger.info(
@@ -101,6 +141,9 @@ async def _collect_and_calculate():
         try:
             alert_service = AlertService()
             notified = alert_service.check_and_notify(risk_results)
+            if alerts_sent_total is not None and notified > 0:
+                for r in high_risk:
+                    alerts_sent_total.labels(severity=r.risk_level).inc()
         except Exception:
             logger.exception("Alert notification failed (non-fatal)")
 
@@ -234,12 +277,21 @@ async def _send_daily_report():
 )
 def collect_and_calculate_all_risks(self):
     """전체 데이터 수집 + 위험지수 계산 + DB 저장"""
+    task_name = "collect_and_calculate"
     logger.info("[Task] collect_and_calculate_all_risks started")
+    start = time.perf_counter()
     try:
         result = run_async(_collect_and_calculate())
+        elapsed = time.perf_counter() - start
+        if celery_task_duration is not None:
+            celery_task_duration.labels(task_name=task_name).observe(elapsed)
+        if celery_tasks_total is not None:
+            celery_tasks_total.labels(task_name=task_name, status="success").inc()
         logger.info("[Task] collect_and_calculate_all_risks completed: %s", result)
         return result
     except Exception as exc:
+        if celery_tasks_total is not None:
+            celery_tasks_total.labels(task_name=task_name, status="failure").inc()
         logger.exception("[Task] collect_and_calculate_all_risks failed")
         raise self.retry(exc=exc)
 
@@ -252,12 +304,21 @@ def collect_and_calculate_all_risks(self):
 )
 def collect_weather_data(self):
     """기상 데이터 단독 수집"""
+    task_name = "collect_weather"
     logger.info("[Task] collect_weather_data started")
+    start = time.perf_counter()
     try:
         result = run_async(_collect_weather_only())
+        elapsed = time.perf_counter() - start
+        if celery_task_duration is not None:
+            celery_task_duration.labels(task_name=task_name).observe(elapsed)
+        if celery_tasks_total is not None:
+            celery_tasks_total.labels(task_name=task_name, status="success").inc()
         logger.info("[Task] collect_weather_data completed: %s", result)
         return result
     except Exception as exc:
+        if celery_tasks_total is not None:
+            celery_tasks_total.labels(task_name=task_name, status="failure").inc()
         logger.exception("[Task] collect_weather_data failed")
         raise self.retry(exc=exc)
 
@@ -270,12 +331,21 @@ def collect_weather_data(self):
 )
 def collect_advisory_data(self):
     """여행경보 데이터 단독 수집"""
+    task_name = "collect_advisory"
     logger.info("[Task] collect_advisory_data started")
+    start = time.perf_counter()
     try:
         result = run_async(_collect_advisory_only())
+        elapsed = time.perf_counter() - start
+        if celery_task_duration is not None:
+            celery_task_duration.labels(task_name=task_name).observe(elapsed)
+        if celery_tasks_total is not None:
+            celery_tasks_total.labels(task_name=task_name, status="success").inc()
         logger.info("[Task] collect_advisory_data completed: %s", result)
         return result
     except Exception as exc:
+        if celery_tasks_total is not None:
+            celery_tasks_total.labels(task_name=task_name, status="failure").inc()
         logger.exception("[Task] collect_advisory_data failed")
         raise self.retry(exc=exc)
 
@@ -288,12 +358,21 @@ def collect_advisory_data(self):
 )
 def send_daily_report(self):
     """일일 리포트 발송"""
+    task_name = "daily_report"
     logger.info("[Task] send_daily_report started")
+    start = time.perf_counter()
     try:
         result = run_async(_send_daily_report())
+        elapsed = time.perf_counter() - start
+        if celery_task_duration is not None:
+            celery_task_duration.labels(task_name=task_name).observe(elapsed)
+        if celery_tasks_total is not None:
+            celery_tasks_total.labels(task_name=task_name, status="success").inc()
         logger.info("[Task] send_daily_report completed: %s", result)
         return result
     except Exception as exc:
+        if celery_tasks_total is not None:
+            celery_tasks_total.labels(task_name=task_name, status="failure").inc()
         logger.exception("[Task] send_daily_report failed")
         raise self.retry(exc=exc)
 
@@ -306,12 +385,21 @@ def send_daily_report(self):
 )
 def recalculate_weights(self):
     """주간 가중치 재산출"""
+    task_name = "recalculate_weights"
     logger.info("[Task] recalculate_weights started")
+    start = time.perf_counter()
     try:
         result = run_async(_recalculate_weights())
+        elapsed = time.perf_counter() - start
+        if celery_task_duration is not None:
+            celery_task_duration.labels(task_name=task_name).observe(elapsed)
+        if celery_tasks_total is not None:
+            celery_tasks_total.labels(task_name=task_name, status="success").inc()
         logger.info("[Task] recalculate_weights completed: %s", result)
         return result
     except Exception as exc:
+        if celery_tasks_total is not None:
+            celery_tasks_total.labels(task_name=task_name, status="failure").inc()
         logger.exception("[Task] recalculate_weights failed")
         raise self.retry(exc=exc)
 
@@ -334,11 +422,20 @@ async def _generate_forecasts():
 )
 def generate_daily_forecasts(self):
     """일일 예측 생성"""
+    task_name = "daily_forecasts"
     logger.info("[Task] generate_daily_forecasts started")
+    start = time.perf_counter()
     try:
         result = run_async(_generate_forecasts())
+        elapsed = time.perf_counter() - start
+        if celery_task_duration is not None:
+            celery_task_duration.labels(task_name=task_name).observe(elapsed)
+        if celery_tasks_total is not None:
+            celery_tasks_total.labels(task_name=task_name, status="success").inc()
         logger.info("[Task] generate_daily_forecasts completed: %s", result)
         return result
     except Exception as exc:
+        if celery_tasks_total is not None:
+            celery_tasks_total.labels(task_name=task_name, status="failure").inc()
         logger.exception("[Task] generate_daily_forecasts failed")
         raise self.retry(exc=exc)
