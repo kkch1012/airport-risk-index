@@ -78,9 +78,9 @@ class InternationalWeatherCollector(BaseCollector):
         icao = raw_data.get("icaoId", "")
         airport_info = INTERNATIONAL_AIRPORTS.get(icao, {})
 
-        wind_speed = raw_data.get("wspd", 0) or 0
-        wind_gust = raw_data.get("wgst", 0) or 0
-        visibility = raw_data.get("visib", 10) or 10
+        wind_speed = self._parse_numeric(raw_data.get("wspd", 0), 0)
+        wind_gust = self._parse_numeric(raw_data.get("wgst", 0), 0)
+        visibility = self._parse_numeric(raw_data.get("visib", 10), 10)
         temp = raw_data.get("temp", None)
         dewpoint = raw_data.get("dewp", None)
         altimeter = raw_data.get("altim", None)
@@ -164,6 +164,22 @@ class InternationalWeatherCollector(BaseCollector):
             score = max(score, 10.0)
 
         return score
+
+    @staticmethod
+    def _parse_numeric(value: Any, default: float = 0) -> float:
+        """숫자 또는 '6+', '10+' 같은 문자열을 float로 변환"""
+        if value is None:
+            return default
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            # "6+", "10+" 등 → 숫자 부분만 추출
+            cleaned = value.strip().rstrip("+")
+            try:
+                return float(cleaned)
+            except ValueError:
+                return default
+        return default
 
     @staticmethod
     def _statute_miles_to_meters(sm: float) -> float:

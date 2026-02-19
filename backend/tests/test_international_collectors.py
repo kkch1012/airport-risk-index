@@ -185,29 +185,38 @@ class TestInternationalAviationCollector:
         old = (datetime.now() - timedelta(days=120)).strftime("%Y-%m-%d")
         assert collector._recency_factor(old) == 0.7  # 120일 전
 
-    def test_parse_rss_invalid_xml(self):
-        """잘못된 XML 처리"""
+    def test_parse_html_invalid(self):
+        """잘못된 HTML 처리"""
         collector = InternationalAviationCollector()
-        result = collector._parse_rss("not valid xml")
+        result = collector._parse_html("not valid html")
         assert result == []
 
-    def test_parse_rss_valid(self):
-        """유효한 RSS 파싱"""
+    def test_parse_html_valid(self):
+        """유효한 HTML 파싱 (Aviation Herald 형식)"""
         collector = InternationalAviationCollector()
-        xml = """<?xml version="1.0"?>
-        <rss version="2.0">
-          <channel>
-            <item>
-              <title>Test incident in Japan</title>
-              <link>https://example.com/1</link>
-              <description>A test incident</description>
-              <pubDate>Mon, 03 Feb 2026 12:00:00 GMT</pubDate>
-            </item>
-          </channel>
-        </rss>"""
-        items = collector._parse_rss(xml)
-        assert len(items) == 1
-        assert items[0]["title"] == "Test incident in Japan"
+        html = """<html><body>
+        <span class="headline_avherald">
+          <a href="/h?article=12345&opt=0">ANA B789 at Tokyo on Feb 17th 2026, engine oil problem</a>
+        </span>
+        <span class="headline_avherald">
+          <a href="/h?article=12346&opt=0">Short</a>
+        </span>
+        </body></html>"""
+        items = collector._parse_html(html)
+        assert len(items) == 1  # 두 번째는 title 20자 미만이라 제외
+        assert "ANA B789" in items[0]["title"]
+        assert "avherald.com" in items[0]["link"]
+        assert items[0]["pub_date"] == "2026-02-17"
+
+    def test_extract_date_from_title(self):
+        """제목에서 날짜 추출"""
+        collector = InternationalAviationCollector()
+        assert collector._extract_date_from_title(
+            "ANA B789 at Tokyo on Feb 17th 2026, engine oil problem"
+        ) == "2026-02-17"
+        assert collector._extract_date_from_title(
+            "Some title on Jan 1st 2025, incident"
+        ) == "2025-01-01"
 
     def test_monitored_countries(self):
         """모니터링 대상 국가"""
