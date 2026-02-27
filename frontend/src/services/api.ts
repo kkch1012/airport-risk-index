@@ -14,10 +14,10 @@ const api = axios.create({
   },
 });
 
-// Request 인터셉터: Bearer 토큰 주입 (localStorage 직접 읽기 — 순환 의존성 방지)
+// Request 인터셉터: Bearer 토큰 주입 (sessionStorage 직접 읽기 — 순환 의존성 방지)
 api.interceptors.request.use((config) => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = sessionStorage.getItem(STORAGE_KEY);
     if (raw) {
       const { token } = JSON.parse(raw);
       if (token) {
@@ -25,17 +25,21 @@ api.interceptors.request.use((config) => {
       }
     }
   } catch {
-    // localStorage 접근 실패 시 무시
+    // sessionStorage 접근 실패 시 무시
   }
   return config;
 });
 
-// Response 인터셉터: 401 시 인증 상태 초기화
+// Response 인터셉터: 401 시 인증 상태 초기화 + 로그인 페이지로 리다이렉트
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(STORAGE_KEY);
+      // 로그인 페이지가 아닌 경우에만 리다이렉트
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   },

@@ -10,6 +10,8 @@ URL: https://araib.molit.go.kr/USR/airboard0201/m_34497/lst.jsp
 - 사고 발생 공항
 """
 
+import asyncio
+import html as html_module
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 import logging
@@ -17,9 +19,8 @@ import logging
 from app.collectors.base import BaseCollector
 from app.config import settings
 
-# requests, bs4는 선택적 import (없으면 목업 사용)
+# bs4는 선택적 import (없으면 목업 사용)
 try:
-    import requests
     from bs4 import BeautifulSoup
     HAS_CRAWL_DEPS = True
 except ImportError:
@@ -73,20 +74,25 @@ class AviationSafetyCollector(BaseCollector):
         super().__init__()
         self.can_crawl = HAS_CRAWL_DEPS
 
-    def _fetch_page(self, page_num: int = 1) -> str:
-        """페이지 HTML 가져오기"""
+    async def _fetch_page(self, page_num: int = 1) -> Optional[str]:
+        """페이지 HTML 가져오기 (async)"""
         params = {
             "currentPage": page_num,
             "srchKeyword": "",
         }
-        response = requests.get(
-            self.source_url,
-            params=params,
-            headers=self.HEADERS,
-            timeout=30
-        )
-        response.raise_for_status()
-        return response.text
+        try:
+            response = await self.client.get(
+                self.source_url,
+                params=params,
+                headers=self.HEADERS,
+            )
+            if response.status_code == 200:
+                return response.text
+            self.logger.warning("ARAIB fetch failed: status %d", response.status_code)
+            return None
+        except Exception as e:
+            self.logger.warning("ARAIB fetch error: %s", e)
+            return None
 
     def _parse_accidents(self, html: str) -> List[Dict[str, Any]]:
         """HTML에서 사고 목록 파싱"""
@@ -161,17 +167,18 @@ class AviationSafetyCollector(BaseCollector):
             all_accidents = []
 
             # 첫 페이지
-            first_html = self._fetch_page(1)
+            first_html = await self._fetch_page(1)
+            if not first_html:
+                return self._get_mock_data()
             total_pages = min(self._get_total_pages(first_html), 5)  # 최대 5페이지
             accidents = self._parse_accidents(first_html)
             all_accidents.extend(accidents)
 
             # 추가 페이지
-            import time
             for page in range(2, total_pages + 1):
-                time.sleep(0.3)
+                await asyncio.sleep(0.3)
                 try:
-                    html = self._fetch_page(page)
+                    html = await self._fetch_page(page)
                     accidents = self._parse_accidents(html)
                     all_accidents.extend(accidents)
                 except Exception as e:

@@ -2,15 +2,17 @@
 리포트 다운로드 API 엔드포인트
 """
 
+import re
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.auth_dependencies import get_current_user
+from app.core.constants import AIRPORT_NAMES
 from app.models.user import User
 from app.services.report_generator import ReportGenerator
 
@@ -24,6 +26,10 @@ async def download_csv(
     _user: User = Depends(get_current_user),
 ):
     """CSV 리포트 다운로드"""
+    if airport_code:
+        airport_code = airport_code.upper()
+        if airport_code not in AIRPORT_NAMES:
+            raise HTTPException(status_code=404, detail="공항을 찾을 수 없습니다.")
     generator = ReportGenerator(db)
     content = await generator.generate_csv(airport_code)
     filename = _make_filename("csv", airport_code)
@@ -42,6 +48,10 @@ async def download_excel(
     _user: User = Depends(get_current_user),
 ):
     """Excel 리포트 다운로드"""
+    if airport_code:
+        airport_code = airport_code.upper()
+        if airport_code not in AIRPORT_NAMES:
+            raise HTTPException(status_code=404, detail="공항을 찾을 수 없습니다.")
     generator = ReportGenerator(db)
     content = await generator.generate_excel(airport_code)
     filename = _make_filename("xlsx", airport_code)
@@ -60,6 +70,10 @@ async def download_pdf(
     _user: User = Depends(get_current_user),
 ):
     """PDF 리포트 다운로드"""
+    if airport_code:
+        airport_code = airport_code.upper()
+        if airport_code not in AIRPORT_NAMES:
+            raise HTTPException(status_code=404, detail="공항을 찾을 수 없습니다.")
     generator = ReportGenerator(db)
     content = await generator.generate_pdf(airport_code)
     filename = _make_filename("pdf", airport_code)
@@ -74,5 +88,7 @@ async def download_pdf(
 def _make_filename(ext: str, airport_code: Optional[str]) -> str:
     date_str = datetime.now().strftime("%Y%m%d")
     if airport_code:
-        return f"risk_report_{airport_code}_{date_str}.{ext}"
+        # 파일명에 안전한 문자만 허용
+        safe_code = re.sub(r"[^A-Za-z0-9]", "", airport_code)
+        return f"risk_report_{safe_code}_{date_str}.{ext}"
     return f"risk_report_all_{date_str}.{ext}"

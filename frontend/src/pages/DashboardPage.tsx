@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -50,10 +51,13 @@ export default function DashboardPage() {
     );
   }
 
-  const riskDistribution = (['LOW', 'MODERATE', 'HIGH', 'CRITICAL'] as RiskLevel[]).map((level) => ({
-    level,
-    count: data.airports.filter((a) => a.level === level).length,
-  }));
+  const riskDistribution = useMemo(
+    () => (['LOW', 'MODERATE', 'HIGH', 'CRITICAL'] as RiskLevel[]).map((level) => ({
+      level,
+      count: data.airports.filter((a) => a.level === level).length,
+    })),
+    [data.airports],
+  );
 
   const locale = i18n.language === 'ko' ? 'ko-KR' : 'en-US';
 
@@ -81,7 +85,8 @@ export default function DashboardPage() {
         </div>
         <button
           onClick={() => refetch()}
-          className="px-4 py-2 text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg flex items-center space-x-2"
+          disabled={isLoading}
+          className="px-4 py-2 text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg flex items-center space-x-2 disabled:opacity-50"
         >
           <span>{t('common.refresh')}</span>
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

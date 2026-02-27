@@ -71,7 +71,7 @@ class WeightCalculator:
         """
         방법 2: Ridge 회귀 표준화 계수 기반 가중치.
         """
-        valid = X.join(y).dropna()
+        valid = X.join(y).replace([np.inf, -np.inf], np.nan).dropna()
         if len(valid) < self.min_samples:
             return self._equal_weights(X.columns)
 
@@ -98,7 +98,7 @@ class WeightCalculator:
         """
         방법 3: Random Forest 변수 중요도 기반 가중치.
         """
-        valid = X.join(y).dropna()
+        valid = X.join(y).replace([np.inf, -np.inf], np.nan).dropna()
         if len(valid) < self.min_samples:
             return self._equal_weights(X.columns)
 

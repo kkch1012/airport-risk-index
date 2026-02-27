@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { fetchCorrelations, fetchWeights, fetchTrends } from '@/services/api';
@@ -13,26 +13,29 @@ export default function AnalyticsPage() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>('overview');
 
-  const TABS: { key: Tab; label: string }[] = [
+  const TABS = useMemo<{ key: Tab; label: string }[]>(() => [
     { key: 'overview', label: t('analytics.tabOverview') },
     { key: 'timeseries', label: t('analytics.tabTimeSeries') },
     { key: 'correlation', label: t('analytics.tabCorrelation') },
     { key: 'comparison', label: t('analytics.tabComparison') },
-  ];
+  ], [t]);
 
   const { data: correlations, isLoading: loadingCorr } = useQuery({
     queryKey: ['correlations'],
     queryFn: fetchCorrelations,
+    enabled: activeTab === 'overview',
   });
 
   const { data: weights, isLoading: loadingWeights } = useQuery({
     queryKey: ['weights'],
     queryFn: fetchWeights,
+    enabled: activeTab === 'overview',
   });
 
   const { data: trends, isLoading: loadingTrends } = useQuery({
     queryKey: ['trends'],
     queryFn: () => fetchTrends(undefined, undefined, '1M'),
+    enabled: activeTab === 'overview',
   });
 
   return (

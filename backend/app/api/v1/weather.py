@@ -26,7 +26,7 @@ async def get_weather_data(
         result = await collector.run()
 
     if result["status"] != "success":
-        raise HTTPException(status_code=500, detail=result.get("error", "수집 실패"))
+        raise HTTPException(status_code=500, detail="기상 데이터 수집에 실패했습니다.")
 
     data = result["data"]
 
@@ -61,7 +61,7 @@ async def get_airport_weather(airport_code: str):
         result = await collector.run()
 
     if result["status"] != "success":
-        raise HTTPException(status_code=500, detail=result.get("error", "수집 실패"))
+        raise HTTPException(status_code=500, detail="기상 데이터 수집에 실패했습니다.")
 
     # 해당 공항 데이터 찾기
     airport_data = next(
@@ -82,7 +82,7 @@ async def get_weather_summary():
         result = await collector.run()
 
     if result["status"] != "success":
-        raise HTTPException(status_code=500, detail=result.get("error", "수집 실패"))
+        raise HTTPException(status_code=500, detail="기상 데이터 수집에 실패했습니다.")
 
     data = result["data"]
 

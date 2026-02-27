@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """애플리케이션 시작/종료 이벤트 핸들러"""
     # 개발환경: DB 테이블 자동 생성
-    if settings.USE_SQLITE or settings.ENV == "development":
+    if settings.USE_SQLITE:
         from app.core.database import init_db
         try:
             await init_db()
@@ -55,8 +55,8 @@ app = FastAPI(
     description="실시간 공항 위험요인 수집 및 통합 위험지수 산출 API",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if settings.ENV != "production" else None,
+    redoc_url="/redoc" if settings.ENV != "production" else None,
 )
 
 # CORS 설정
@@ -64,8 +64,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
 
 # 요청 타이밍 + 접근 로그 미들웨어
@@ -101,10 +101,11 @@ async def health_check():
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     """전역 예외 핸들러"""
+    logger.exception("Unhandled exception: %s", type(exc).__name__)
     return JSONResponse(
         status_code=500,
         content={
             "error": "Internal Server Error",
-            "message": str(exc) if settings.DEBUG else "서버 오류가 발생했습니다.",
+            "message": "서버 오류가 발생했습니다.",
         },
     )

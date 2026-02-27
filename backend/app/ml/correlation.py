@@ -51,7 +51,7 @@ class CorrelationAnalyzer:
             y = valid.iloc[:, -1].values
 
             # 분산이 0이면 상관계수 계산 불가
-            if np.std(x) == 0 or np.std(y) == 0:
+            if np.std(x) < 1e-10 or np.std(y) < 1e-10:
                 results[col] = {
                     "pearson_r": 0.0, "pearson_p": 1.0,
                     "spearman_r": 0.0, "spearman_p": 1.0,
@@ -96,7 +96,7 @@ class CorrelationAnalyzer:
                     continue
 
                 x, y = valid[col_a].values, valid[col_b].values
-                if np.std(x) == 0 or np.std(y) == 0:
+                if np.std(x) < 1e-10 or np.std(y) < 1e-10:
                     results[col_a][col_b] = {"pearson_r": 0.0, "pearson_p": 1.0}
                     continue
 
@@ -134,7 +134,7 @@ class CorrelationAnalyzer:
                 "mean": round(mean, 2),
                 "std": round(std, 2),
                 "variance": round(std ** 2, 2),
-                "cv": round(std / mean, 4) if mean != 0 else 0,
+                "cv": round(std / abs(mean), 4) if abs(mean) > 1e-10 else 0,
             }
 
         return results

@@ -3,6 +3,7 @@
 """
 
 import logging
+import threading
 import time
 from typing import Dict, List, Tuple
 
@@ -13,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 # 중복 알림 방지 캐시: {(airport_code, risk_level): timestamp}
 _alert_cache: Dict[Tuple[str, str], float] = {}
+_alert_cache_lock = threading.Lock()
 
 # 중복 알림 방지 간격 (초)
 ALERT_COOLDOWN = 3600  # 1시간
@@ -62,10 +64,11 @@ class AlertService:
         sent = self.email_service.send(subject, html)
 
         if sent:
-            # 캐시 갱신
+            # 캐시 갱신 (thread-safe)
             now = time.time()
-            for r in new_alerts:
-                _alert_cache[(r.airport_code, r.risk_level)] = now
+            with _alert_cache_lock:
+                for r in new_alerts:
+                    _alert_cache[(r.airport_code, r.risk_level)] = now
 
             logger.info(
                 "[Alert] 알림 발송 완료: CRITICAL=%d, HIGH=%d",
@@ -101,21 +104,23 @@ class AlertService:
         now = time.time()
         new_alerts = []
 
-        # 만료된 캐시 정리
-        expired = [k for k, t in _alert_cache.items() if now - t > ALERT_COOLDOWN]
-        for k in expired:
-            del _alert_cache[k]
+        with _alert_cache_lock:
+            # 만료된 캐시 정리
+            expired = [k for k, t in _alert_cache.items() if now - t > ALERT_COOLDOWN]
+            for k in expired:
+                del _alert_cache[k]
 
-        for r in high_risk:
-            key = (r.airport_code, r.risk_level)
-            last_sent = _alert_cache.get(key)
+            for r in high_risk:
+                key = (r.airport_code, r.risk_level)
+                last_sent = _alert_cache.get(key)
 
-            if last_sent is None or (now - last_sent) > ALERT_COOLDOWN:
-                new_alerts.append(r)
+                if last_sent is None or (now - last_sent) > ALERT_COOLDOWN:
+                    new_alerts.append(r)
 
         return new_alerts
 
 
 def reset_alert_cache():
     """테스트용 캐시 초기화"""
-    _alert_cache.clear()
+    with _alert_cache_lock:
+        _alert_cache.clear()

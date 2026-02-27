@@ -12,11 +12,30 @@ interface AuthState {
   checkAuth: () => Promise<void>;
 }
 
+/** JWT 만료 확인 (base64 디코딩으로 exp 필드 검사) */
+function isTokenExpired(token: string): boolean {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return true;
+    const payload = JSON.parse(atob(parts[1]));
+    if (!payload.exp) return false;
+    // 10초 여유를 두고 만료 판단
+    return payload.exp * 1000 < Date.now() - 10000;
+  } catch {
+    return true;
+  }
+}
+
 function loadToken(): string | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw).token || null;
+    const token = JSON.parse(raw).token || null;
+    if (token && isTokenExpired(token)) {
+      sessionStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+    return token;
   } catch {
     return null;
   }
@@ -24,9 +43,9 @@ function loadToken(): string | null {
 
 function persist(token: string | null) {
   if (token) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ token }));
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ token }));
   } else {
-    localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(STORAGE_KEY);
   }
 }
 

@@ -32,7 +32,14 @@ async def get_current_user(
             detail="토큰에 사용자 정보가 없습니다.",
         )
 
-    user = await get_user_by_id(db, int(user_id))
+    try:
+        uid = int(user_id)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="유효하지 않은 인증 토큰입니다.",
+        )
+    user = await get_user_by_id(db, uid)
     if user is None or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

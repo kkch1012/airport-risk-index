@@ -2,7 +2,7 @@
 위험지수 이력 ORM 모델
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from sqlalchemy import (
     Column,
@@ -20,6 +20,10 @@ from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
+def _utcnow():
+    return datetime.now(timezone.utc)
+
+
 class RiskAssessment(Base):
     """공항별 일자별 종합 위험지수 평가"""
 
@@ -31,8 +35,8 @@ class RiskAssessment(Base):
     assessed_date = Column(Date, nullable=False, index=True)
     total_score = Column(Float, nullable=False)
     risk_level = Column(String(20), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
     # 카테고리별 점수 (1:N)
     category_scores = relationship(

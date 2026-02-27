@@ -10,7 +10,7 @@ API 실패 시 mock fallback (기존 수집기 패턴 동일)
 """
 
 import re
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 import hashlib
 from datetime import datetime, timedelta
 from typing import Any, Dict, List

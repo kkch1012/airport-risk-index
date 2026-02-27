@@ -5,7 +5,7 @@ Source: Google News RSS (한국어)
 키워드 기반 공항/항공 관련 위험 뉴스 탐지
 """
 
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 import re
 import hashlib
 from datetime import datetime, timedelta
@@ -240,7 +240,7 @@ class NewsCrawler(BaseCollector):
     def _generate_id(raw_data: Dict[str, Any]) -> str:
         """고유 ID 생성"""
         content = f"{raw_data.get('title', '')}{raw_data.get('link', '')}"
-        return hashlib.md5(content.encode()).hexdigest()[:16]
+        return hashlib.sha256(content.encode()).hexdigest()[:16]
 
     def _get_mock_data(self) -> List[Dict[str, Any]]:
         """목업 뉴스 데이터"""
@@ -267,7 +267,7 @@ class NewsCrawler(BaseCollector):
             hours_ago = random.randint(1, 48)
             pub_time = (now - timedelta(hours=hours_ago))
             articles.append({
-                "article_id": hashlib.md5(title.encode()).hexdigest()[:16],
+                "article_id": hashlib.sha256(title.encode()).hexdigest()[:16],
                 "title": title,
                 "link": f"https://news.example.com/{random.randint(10000, 99999)}",
                 "published_at": pub_time.strftime("%a, %d %b %Y %H:%M:%S GMT"),

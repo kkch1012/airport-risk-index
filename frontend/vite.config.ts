@@ -9,6 +9,17 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          charts: ['recharts'],
+          query: ['@tanstack/react-query'],
+        },
+      },
+    },
+  },
   server: {
     port: 3000,
     host: true,

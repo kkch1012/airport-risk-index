@@ -2,7 +2,9 @@
 위험지수 관련 API 엔드포인트
 """
 
+import asyncio
 import logging
+import re
 
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Optional
@@ -18,6 +20,9 @@ from app.services.risk_history_service import RiskHistoryService
 from app.services.weight_service import WeightService
 from app.core.database import AsyncSessionLocal
 from app.core.constants import AIRPORT_NAMES
+
+# 공항 코드 형식 검증 패턴
+_AIRPORT_CODE_RE = re.compile(r"^[A-Z]{3,4}$")
 from app.schemas.risks import (
     DashboardResponse,
     AirportRiskResponse,
@@ -116,20 +121,18 @@ async def get_dashboard():
     """대시보드 전체 현황"""
     calculator = await _get_calculator()
 
-    # 실제 기상 데이터 수집
-    weather_map = await get_weather_data_map()
-
-    # 여행경보 데이터 수집
-    travel_advisory_data, is_advisory_real = await get_travel_advisory_data()
-
-    # 보건위험 데이터 수집
-    health_data, is_health_real = await get_health_data()
-
-    # 운영위험 데이터 수집
-    operational_data, is_operational_real = await get_operational_data()
-
-    # 항공안전 데이터 수집
-    aviation_data, is_aviation_real = await get_aviation_data()
+    # 모든 수집기를 병렬로 실행
+    weather_map, \
+        (travel_advisory_data, is_advisory_real), \
+        (health_data, is_health_real), \
+        (operational_data, is_operational_real), \
+        (aviation_data, is_aviation_real) = await asyncio.gather(
+        get_weather_data_map(),
+        get_travel_advisory_data(),
+        get_health_data(),
+        get_operational_data(),
+        get_aviation_data(),
+    )
 
     airport_data = []
     risk_results = []
@@ -383,8 +386,8 @@ async def get_risk_history(
     airport_code: str,
     start_date: date,
     end_date: date,
-    page: int = 1,
-    page_size: int = 50,
+    page: int = Query(1, ge=1, le=10000),
+    page_size: int = Query(50, ge=1, le=200),
 ):
     """위험지수 이력 조회 (DB 기반, 페이지네이션 지원)"""
     airport_code = airport_code.upper()
@@ -392,7 +395,9 @@ async def get_risk_history(
     if airport_code not in AIRPORT_NAMES:
         raise HTTPException(status_code=404, detail="공항을 찾을 수 없습니다.")
 
-    page_size = min(page_size, 200)  # 최대 200건
+    if start_date > end_date:
+        raise HTTPException(status_code=400, detail="시작일이 종료일보다 늦을 수 없습니다.")
+
     offset = (page - 1) * page_size
 
     async with AsyncSessionLocal() as session:
@@ -428,9 +433,12 @@ async def get_risk_history(
 
 @router.get("/comparison", response_model=ComparisonResponse)
 async def compare_airports(
-    airport_codes: List[str] = Query(...),
+    airport_codes: List[str] = Query(..., max_length=15),
 ):
     """공항 간 비교"""
+    if len(airport_codes) > 15:
+        raise HTTPException(status_code=400, detail="최대 15개 공항까지 비교 가능합니다.")
+
     calculator = await _get_calculator()
     weather_map = await get_weather_data_map()
     travel_advisory_data, _ = await get_travel_advisory_data()

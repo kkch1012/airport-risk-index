@@ -2,6 +2,8 @@
 데이터베이스 연결 및 세션 관리
 """
 
+import os
+
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
@@ -10,11 +12,14 @@ from app.config import settings
 
 # 비동기 엔진 생성 (SQLite는 pool_size/max_overflow 미지원)
 engine_kwargs = {
-    "echo": settings.DEBUG,
+    "echo": os.environ.get("SQL_ECHO", "false").lower() == "true",
 }
 if not settings.USE_SQLITE:
     engine_kwargs["pool_size"] = 10
     engine_kwargs["max_overflow"] = 20
+    engine_kwargs["pool_pre_ping"] = True
+    engine_kwargs["pool_recycle"] = 3600
+    engine_kwargs["pool_timeout"] = 30
 
 engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
 

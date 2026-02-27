@@ -40,7 +40,7 @@ def _get_redis():
 def _make_key(prefix: str, *args, **kwargs) -> str:
     """캐시 키 생성"""
     raw = f"{prefix}:{args}:{sorted(kwargs.items())}"
-    h = hashlib.md5(raw.encode()).hexdigest()[:12]
+    h = hashlib.sha256(raw.encode()).hexdigest()[:16]
     return f"ari:cache:{prefix}:{h}"
 
 

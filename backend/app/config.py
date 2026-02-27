@@ -2,9 +2,13 @@
 애플리케이션 설정
 """
 
+import logging
 from typing import List
 from pydantic_settings import BaseSettings
+from pydantic import model_validator
 from functools import lru_cache
+
+_config_logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -12,8 +16,8 @@ class Settings(BaseSettings):
 
     # 기본 설정
     ENV: str = "development"
-    DEBUG: bool = True
-    SECRET_KEY: str = "your-secret-key-change-in-production"
+    DEBUG: bool = False
+    SECRET_KEY: str = "dev-only-change-in-production"
 
     # 데이터베이스
     DB_HOST: str = "localhost"
@@ -55,7 +59,7 @@ class Settings(BaseSettings):
     DATA_GO_KR_API_KEY: str = ""
 
     # JWT
-    JWT_SECRET_KEY: str = "your-jwt-secret-key"
+    JWT_SECRET_KEY: str = "dev-only-jwt-change-in-production"
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -84,6 +88,15 @@ class Settings(BaseSettings):
     # Celery
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
+
+    @model_validator(mode='after')
+    def validate_production_secrets(self):
+        if self.ENV == "production":
+            if "dev-only" in self.SECRET_KEY or "dev-only" in self.JWT_SECRET_KEY:
+                raise ValueError("SECRET_KEY and JWT_SECRET_KEY must be changed for production")
+            if self.DB_PASSWORD == "postgres":
+                raise ValueError("DB_PASSWORD must be changed for production")
+        return self
 
     class Config:
         env_file = ".env"

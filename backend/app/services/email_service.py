@@ -4,6 +4,7 @@
 
 import logging
 import smtplib
+import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import List, Optional
@@ -52,18 +53,19 @@ class EmailService:
             return False
 
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
+        msg["Subject"] = subject.replace('\r', '').replace('\n', ' ')
         msg["From"] = self.from_addr
         msg["To"] = ", ".join(to_addrs)
         msg.attach(MIMEText(html_body, "html", "utf-8"))
 
         try:
             with smtplib.SMTP(self.host, self.port, timeout=10) as server:
-                server.starttls()
+                context = ssl.create_default_context()
+                server.starttls(context=context)
                 server.login(self.user, self.password)
                 server.sendmail(self.from_addr, to_addrs, msg.as_string())
 
-            logger.info("[Email] 발송 성공: %s → %s", subject, to_addrs)
+            logger.info("[Email] 발송 성공: %s → %d명", subject, len(to_addrs))
             return True
         except Exception:
             logger.exception("[Email] 발송 실패: %s", subject)

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { loginAPI, fetchMe } from '@/services/api';
@@ -14,11 +14,12 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // 이미 로그인 상태면 대시보드로
-  if (isAuthenticated) {
-    navigate('/', { replace: true });
-    return null;
-  }
+  // 이미 로그인 상태면 대시보드로 (렌더링 중 navigate 방지)
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,7 +28,6 @@ export default function LoginPage() {
 
     try {
       const { access_token } = await loginAPI({ username, password });
-      localStorage.setItem('auth-storage', JSON.stringify({ token: access_token }));
       const user = await fetchMe();
       setAuth(access_token, user);
       navigate('/', { replace: true });
@@ -78,6 +78,7 @@ export default function LoginPage() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
+              maxLength={100}
               autoComplete="username"
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm
                          focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -95,6 +96,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              maxLength={128}
               autoComplete="current-password"
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm
                          focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"

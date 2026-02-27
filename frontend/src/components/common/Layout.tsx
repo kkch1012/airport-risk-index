@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
@@ -8,10 +9,10 @@ export default function Layout() {
   const navigate = useNavigate();
   const { isAuthenticated, user, logout } = useAuthStore();
 
-  const navigation = [
+  const navigation = useMemo(() => [
     { name: t('nav.dashboard'), path: '/' },
     { name: t('nav.analytics'), path: '/analytics' },
-  ];
+  ], [t]);
 
   const handleLogout = () => {
     logout();
@@ -42,6 +43,7 @@ export default function Layout() {
                 <Link
                   key={item.path}
                   to={item.path}
+                  aria-current={location.pathname === item.path ? 'page' : undefined}
                   className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                     location.pathname === item.path
                       ? 'bg-blue-100 text-blue-700'

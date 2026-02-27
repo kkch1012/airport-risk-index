@@ -5,9 +5,11 @@
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.constants import AIRPORT_NAMES
 
 from app.core.database import get_db
 from app.ml.weight_calculator import DEFAULT_CATEGORY_WEIGHTS
@@ -104,10 +106,18 @@ async def get_current_weights(db: AsyncSession = Depends(get_db)):
 async def get_trend_analysis(
     airport_code: Optional[str] = None,
     category: Optional[str] = None,
-    period: str = "1M",
+    period: str = Query("1M", pattern="^(1W|1M|3M|6M|1Y)$"),
     db: AsyncSession = Depends(get_db),
 ):
     """트렌드 분석"""
+    _VALID_CATEGORIES = {"weather", "aviation", "security", "health", "operational", "external", "total"}
+    if airport_code:
+        airport_code = airport_code.upper()
+        if airport_code not in AIRPORT_NAMES:
+            raise HTTPException(status_code=404, detail="공항을 찾을 수 없습니다.")
+    if category and category not in _VALID_CATEGORIES:
+        raise HTTPException(status_code=400, detail=f"유효하지 않은 카테고리: {category}")
+
     period_days = {"1W": 7, "1M": 30, "3M": 90, "6M": 180, "1Y": 365}
     days = period_days.get(period, 30)
     cutoff = datetime.now().date() - timedelta(days=days)
@@ -283,11 +293,17 @@ async def get_statistics(db: AsyncSession = Depends(get_db)):
 async def get_forecast(
     airport_code: str,
     category: Optional[str] = None,
-    horizon: int = 7,
+    horizon: int = Query(7, ge=1, le=14),
     db: AsyncSession = Depends(get_db),
 ):
     """공항 위험지수 예측 (시계열 forecasting)"""
-    horizon = max(1, min(horizon, 14))
+    airport_code = airport_code.upper()
+    if airport_code not in AIRPORT_NAMES:
+        raise HTTPException(status_code=404, detail="공항을 찾을 수 없습니다.")
+
+    _VALID_CATEGORIES = {"weather", "aviation", "security", "health", "operational", "external"}
+    if category and category not in _VALID_CATEGORIES:
+        raise HTTPException(status_code=400, detail=f"유효하지 않은 카테고리: {category}")
 
     service = ForecastService(db)
     result = await service.forecast_airport(

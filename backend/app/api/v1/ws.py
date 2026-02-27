@@ -11,6 +11,7 @@ from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.core.websocket_manager import manager
+from app.core.constants import AIRPORT_NAMES
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,9 @@ HEARTBEAT_INTERVAL = 30  # 초
 @router.websocket("/risks")
 async def ws_all_risks(websocket: WebSocket):
     """전체 위험지수 실시간 스트림"""
-    await manager.connect(websocket, channel="ALL")
+    connected = await manager.connect(websocket, channel="ALL")
+    if not connected:
+        return
 
     # 연결 확인 메시지
     await manager.send_personal(websocket, {
@@ -61,7 +64,12 @@ async def ws_all_risks(websocket: WebSocket):
 async def ws_airport_risks(websocket: WebSocket, airport_code: str):
     """특정 공항 위험지수 실시간 스트림"""
     channel = airport_code.upper()
-    await manager.connect(websocket, channel=channel)
+    if channel not in AIRPORT_NAMES:
+        await websocket.close(code=4000)
+        return
+    connected = await manager.connect(websocket, channel=channel)
+    if not connected:
+        return
 
     await manager.send_personal(websocket, {
         "type": "connected",

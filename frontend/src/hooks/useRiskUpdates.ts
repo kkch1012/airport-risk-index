@@ -42,8 +42,9 @@ export function useRiskUpdates({ airportCode, enabled = true }: UseRiskUpdatesOp
 
   const handleMessage = useCallback(
     (raw: unknown) => {
-      if (typeof raw !== 'object' || raw === null || !('type' in raw)) return;
+      if (typeof raw !== 'object' || raw === null || !('type' in raw) || !('timestamp' in raw)) return;
       const msg = raw as WSRiskUpdate;
+      if (!['risk_update', 'connected', 'heartbeat', 'error'].includes(msg.type)) return;
 
       if (msg.type === 'risk_update' && msg.data?.airports) {
         // 대시보드 캐시 무효화 → refetch

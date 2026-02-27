@@ -20,6 +20,8 @@ interface UseWebSocketOptions {
  * - heartbeat ping/pong
  * - 연결 상태 관리
  */
+const MAX_RECONNECT_ATTEMPTS = 20;
+
 export function useWebSocket({
   url,
   onMessage,
@@ -43,7 +45,14 @@ export function useWebSocket({
 
   const scheduleReconnect = useCallback(() => {
     const attempt = reconnectAttemptRef.current;
-    const delay = Math.min(1000 * Math.pow(2, attempt), maxReconnectDelay);
+    if (attempt >= MAX_RECONNECT_ATTEMPTS) {
+      setStatus('disconnected');
+      return;
+    }
+    // Exponential backoff + jitter to prevent thundering herd
+    const base = Math.min(1000 * Math.pow(2, attempt), maxReconnectDelay);
+    const jitter = base * 0.3 * Math.random();
+    const delay = base + jitter;
     reconnectAttemptRef.current = attempt + 1;
 
     reconnectTimerRef.current = setTimeout(() => {

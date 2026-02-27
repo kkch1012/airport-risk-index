@@ -3,7 +3,9 @@ import { initReactI18next } from 'react-i18next';
 import ko from './locales/ko.json';
 import en from './locales/en.json';
 
-const savedLang = localStorage.getItem('i18n-lang') || 'ko';
+const SUPPORTED_LANGS = ['ko', 'en'];
+const rawLang = localStorage.getItem('i18n-lang');
+const savedLang = rawLang && SUPPORTED_LANGS.includes(rawLang) ? rawLang : 'ko';
 
 i18n.use(initReactI18next).init({
   resources: {

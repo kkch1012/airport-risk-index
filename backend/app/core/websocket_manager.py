@@ -13,6 +13,9 @@ from fastapi import WebSocket
 logger = logging.getLogger(__name__)
 
 
+MAX_WS_CONNECTIONS = 500
+
+
 class ConnectionManager:
     """WebSocket 연결 관리"""
 
@@ -20,13 +23,18 @@ class ConnectionManager:
         # {channel: [WebSocket, ...]}
         self._connections: Dict[str, List[WebSocket]] = {}
 
-    async def connect(self, websocket: WebSocket, channel: str = "ALL"):
-        """WebSocket 연결 수락 및 채널 등록"""
+    async def connect(self, websocket: WebSocket, channel: str = "ALL") -> bool:
+        """WebSocket 연결 수락 및 채널 등록. 제한 초과시 False 반환."""
+        if self.connection_count >= MAX_WS_CONNECTIONS:
+            await websocket.close(code=1013)  # Try Again Later
+            logger.warning("[WS] Connection limit reached (%d), rejecting", MAX_WS_CONNECTIONS)
+            return False
         await websocket.accept()
         if channel not in self._connections:
             self._connections[channel] = []
         self._connections[channel].append(websocket)
         logger.info("[WS] Connected: channel=%s (total=%d)", channel, self.connection_count)
+        return True
 
     def disconnect(self, websocket: WebSocket, channel: str = "ALL"):
         """WebSocket 연결 해제"""

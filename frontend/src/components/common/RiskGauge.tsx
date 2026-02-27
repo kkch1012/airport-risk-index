@@ -19,7 +19,9 @@ const sizeConfig = {
   lg: { width: 150, height: 150, strokeWidth: 10, fontSize: 'text-3xl' },
 };
 
-export default function RiskGauge({ score, size = 'md', showLabel = true }: RiskGaugeProps) {
+import { memo } from 'react';
+
+const RiskGauge = memo(function RiskGauge({ score, size = 'md', showLabel = true }: RiskGaugeProps) {
   const { t } = useTranslation();
   const config = sizeConfig[size];
   const radius = (config.width - config.strokeWidth) / 2;
@@ -71,4 +73,6 @@ export default function RiskGauge({ score, size = 'md', showLabel = true }: Risk
       )}
     </div>
   );
-}
+});
+
+export default RiskGauge;

@@ -19,7 +19,9 @@ const sizeConfig = {
   lg: 'px-3 py-1.5 text-base',
 };
 
-export default function RiskBadge({ level, size = 'md' }: RiskBadgeProps) {
+import { memo } from 'react';
+
+const RiskBadge = memo(function RiskBadge({ level, size = 'md' }: RiskBadgeProps) {
   const { t } = useTranslation();
   const { bgColor, textColor } = styleConfig[level];
 
@@ -30,4 +32,6 @@ export default function RiskBadge({ level, size = 'md' }: RiskBadgeProps) {
       {t(`riskLevel.${level}`)}
     </span>
   );
-}
+});
+
+export default RiskBadge;

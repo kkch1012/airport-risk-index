@@ -94,6 +94,10 @@ def auth_client(auth_db):
 def persistent_auth_client():
     """영속적 DB를 가진 인증 테스트 클라이언트 (회원가입 → 로그인 연계 테스트)"""
     import asyncio
+    from app.api.v1.auth import _reset_rate_limits
+
+    # 테스트 간 rate limit 간섭 방지
+    _reset_rate_limits()
 
     _engine = create_async_engine("sqlite+aiosqlite://", echo=False)
 

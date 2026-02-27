@@ -18,6 +18,23 @@ RISK_UPDATES_CHANNEL = "risk_updates"
 _redis_available = True
 
 
+_async_redis_pool = None
+
+
+async def _get_async_redis():
+    """비동기 Redis 커넥션 풀 (싱글톤)"""
+    global _async_redis_pool
+    if _async_redis_pool is not None:
+        return _async_redis_pool
+    try:
+        import aioredis
+        from app.config import settings
+        _async_redis_pool = await aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+        return _async_redis_pool
+    except Exception:
+        return None
+
+
 async def publish_risk_update(data: dict):
     """Redis에 위험지수 업데이트 publish (async)"""
     global _redis_available
@@ -25,13 +42,12 @@ async def publish_risk_update(data: dict):
         return
 
     try:
-        import aioredis
-        from app.config import settings
-
-        redis = await aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+        redis = await _get_async_redis()
+        if not redis:
+            _redis_available = False
+            return
         message = json.dumps(data, ensure_ascii=False, default=str)
         await redis.publish(RISK_UPDATES_CHANNEL, message)
-        await redis.close()
         logger.debug("[PubSub] Published risk update to Redis")
     except Exception:
         _redis_available = False

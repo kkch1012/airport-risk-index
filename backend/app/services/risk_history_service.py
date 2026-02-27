@@ -85,17 +85,20 @@ class RiskHistoryService:
         return assessment
 
     async def save_batch(self, results: List[RiskResult]) -> int:
-        """여러 공항 일괄 저장. 저장 성공 건수 반환."""
+        """여러 공항 일괄 저장. 단일 트랜잭션으로 처리하여 일관성 보장."""
         saved = 0
-        for result in results:
-            try:
+        try:
+            for result in results:
                 await self.save_assessment(result)
                 saved += 1
-            except Exception:
-                logger.exception(
-                    "Failed to save assessment for %s", result.airport_code
-                )
-                await self.session.rollback()
+        except Exception:
+            logger.exception(
+                "Failed to save batch at %d/%d assessments",
+                saved,
+                len(results),
+            )
+            await self.session.rollback()
+            return 0
         return saved
 
     async def get_history(

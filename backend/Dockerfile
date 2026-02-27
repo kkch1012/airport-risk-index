@@ -25,11 +25,17 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
+# 비-root 사용자 생성
+RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser
+
 # 애플리케이션 복사
 COPY . .
 
-# entrypoint 스크립트 실행 권한
-RUN chmod +x /app/entrypoint.sh
+# entrypoint 스크립트 실행 권한 + 소유권 변경
+RUN chmod +x /app/entrypoint.sh && chown -R appuser:appuser /app
+
+# 비-root 사용자로 전환
+USER appuser
 
 # 포트 노출
 EXPOSE 8000

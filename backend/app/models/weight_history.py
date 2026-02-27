@@ -2,7 +2,7 @@
 가중치 이력 ORM 모델
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from sqlalchemy import (
     Boolean,
@@ -17,13 +17,17 @@ from sqlalchemy import (
 from app.core.database import Base
 
 
+def _utcnow():
+    return datetime.now(timezone.utc)
+
+
 class WeightHistory(Base):
     """카테고리 가중치 산출 이력"""
 
     __tablename__ = "weight_histories"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    calculated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    calculated_at = Column(DateTime, nullable=False, default=_utcnow)
     is_active = Column(Boolean, nullable=False, default=False, index=True)
     method = Column(String(30), nullable=False)  # ensemble, correlation, regression, rf, variance
     category_weights = Column(JSON, nullable=False)  # {"weather": 0.20, ...}

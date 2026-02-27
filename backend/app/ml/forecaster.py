@@ -170,7 +170,7 @@ class RiskForecaster:
                 level[t] = a * values[t] + (1 - a) * (level[t - 1] + trend[t - 1])
                 trend[t] = b * (level[t] - level[t - 1]) + (1 - b) * trend[t - 1]
 
-            return sse / (n - 1)
+            return sse / max(n - 1, 1)
 
         result = minimize(
             mse_loss,

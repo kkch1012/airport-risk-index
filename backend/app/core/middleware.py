@@ -6,6 +6,7 @@ HTTP 요청 미들웨어
 """
 
 import logging
+import re
 import time
 from typing import Optional
 
@@ -47,9 +48,11 @@ class RequestTimingMiddleware(BaseHTTPMiddleware):
         method = request.method
         status = response.status_code
 
-        # Prometheus 메트릭 기록
+        # Prometheus 메트릭 기록 (경로 정규화로 카디널리티 폭발 방지)
         if _histogram is not None:
-            _histogram.labels(method=method, path=path, status=status).observe(duration)
+            normalized = re.sub(r'/airports/[A-Za-z]{2,4}', '/airports/{code}', path)
+            normalized = re.sub(r'/\d+', '/{id}', normalized)
+            _histogram.labels(method=method, path=normalized, status=status).observe(duration)
 
         # 접근 로그 (노이즈 경로 제외)
         if path not in EXCLUDED_PATHS:
