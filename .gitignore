@@ -143,3 +143,7 @@ celerybeat.pid
 # -------------------------------------------
 backend/*.csv
 backend/araib_*.csv
+
+# Claude work logs
+CLAUDE.md
+CLAUDE_archive.md
