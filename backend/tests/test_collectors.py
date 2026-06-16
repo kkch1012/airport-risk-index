@@ -152,13 +152,6 @@ class TestTravelAdvisoryCollector:
         data = await collector.collect()
         assert isinstance(data, list)
 
-    def test_mock_data_generation(self, collector):
-        """목업 데이터 생성 확인"""
-        mock_data = collector._get_mock_data()
-        assert len(mock_data) > 0
-        assert all("country_code" in d for d in mock_data)
-        assert all("alarm_lvl" in d for d in mock_data)
-
     def test_transform_data(self, collector):
         """데이터 변환 확인"""
         raw_data = {

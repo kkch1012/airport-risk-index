@@ -101,11 +101,10 @@ class TestNewsCrawler:
 
     @pytest.mark.asyncio
     async def test_collect_returns_data(self):
-        """수집 결과 반환 (목업 포함)"""
+        """수집 결과 반환 (mock 제거 후 데이터 없으면 빈 리스트)"""
         async with NewsCrawler() as crawler:
             data = await crawler.collect()
         assert isinstance(data, list)
-        assert len(data) > 0
 
     @pytest.mark.asyncio
     async def test_run_produces_transformed_data(self):

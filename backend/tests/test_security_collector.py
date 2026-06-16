@@ -24,10 +24,9 @@ class TestSecurityThreatCollector:
 
     @pytest.mark.asyncio
     async def test_collect_returns_list(self, collector):
-        """수집 결과가 리스트인지 확인 (API 키 없으면 mock)"""
+        """수집 결과가 리스트인지 확인 (mock 제거 후 데이터 없으면 빈 리스트)"""
         data = await collector.collect()
         assert isinstance(data, list)
-        assert len(data) > 0
 
     def test_transform_news_event(self, collector):
         """뉴스 이벤트 변환 테스트"""
@@ -121,17 +120,6 @@ class TestSecurityThreatCollector:
         assert collector._calculate_stat_threat_score("illegal_entry", 25) == 50.0
         assert collector._calculate_stat_threat_score("illegal_entry", 100) == 100  # 상한
         assert collector._calculate_stat_threat_score("unknown_type", 100) == 0
-
-    def test_mock_data_structure(self, collector):
-        """목업 데이터 구조 확인"""
-        mock = collector._get_mock_data()
-        assert isinstance(mock, list)
-        assert 3 <= len(mock) <= 6
-        for item in mock:
-            assert "source_type" in item
-            assert "threat_type" in item
-            assert item["threat_type"] in ("terror", "smuggling", "illegal_entry")
-
 
 class TestSecurityScore:
     """calculate_security_score 메서드 테스트"""

@@ -160,8 +160,8 @@ class AviationSafetyCollector(BaseCollector):
     async def collect(self) -> List[Dict[str, Any]]:
         """항공사고 데이터 수집"""
         if not self.can_crawl:
-            self.logger.warning("크롤링 의존성 없음. 목업 데이터 반환.")
-            return self._get_mock_data()
+            self.logger.warning("크롤링 의존성 없음. → 데이터 없음")
+            return []
 
         try:
             all_accidents = []
@@ -169,7 +169,7 @@ class AviationSafetyCollector(BaseCollector):
             # 첫 페이지
             first_html = await self._fetch_page(1)
             if not first_html:
-                return self._get_mock_data()
+                return []
             total_pages = min(self._get_total_pages(first_html), 5)  # 최대 5페이지
             accidents = self._parse_accidents(first_html)
             all_accidents.extend(accidents)
@@ -187,13 +187,13 @@ class AviationSafetyCollector(BaseCollector):
             self.logger.info(f"항공사고 {len(all_accidents)}건 수집 완료")
 
             if not all_accidents:
-                return self._get_mock_data()
+                return []
 
             return all_accidents
 
         except Exception as e:
             self.logger.error(f"크롤링 실패: {e}")
-            return self._get_mock_data()
+            return []
 
     def transform(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
         """수집된 데이터를 표준 형식으로 변환"""
@@ -267,77 +267,6 @@ class AviationSafetyCollector(BaseCollector):
         if not data.get("accident_type"):
             return False
         return True
-
-    def _get_mock_data(self) -> List[Dict[str, Any]]:
-        """목업 데이터"""
-        import random
-
-        now = datetime.now()
-        random.seed(now.strftime("%Y%m%d"))
-
-        mock_accidents = [
-            {
-                "accident_id": "325",
-                "occurrence_date": "2024/09/16",
-                "report_date": "2025/01/02",
-                "accident_type": "항공기 준사고",
-                "operator": "(주) 한국항공",
-                "aircraft_type": "C172S",
-                "location": "무안국제공항 활주로 01",
-            },
-            {
-                "accident_id": "320",
-                "occurrence_date": "2024/07/22",
-                "report_date": "2024/12/15",
-                "accident_type": "항공기 준사고",
-                "operator": "대한항공",
-                "aircraft_type": "B737-800",
-                "location": "김포국제공항",
-            },
-            {
-                "accident_id": "318",
-                "occurrence_date": "2024/06/10",
-                "report_date": "2024/11/20",
-                "accident_type": "항공기 준사고",
-                "operator": "아시아나항공",
-                "aircraft_type": "A321",
-                "location": "김해국제공항",
-            },
-            {
-                "accident_id": "315",
-                "occurrence_date": "2024/04/05",
-                "report_date": "2024/09/30",
-                "accident_type": "항공기 사고",
-                "operator": "제주항공",
-                "aircraft_type": "B737-800",
-                "location": "제주국제공항",
-            },
-            {
-                "accident_id": "312",
-                "occurrence_date": "2024/02/18",
-                "report_date": "2024/07/25",
-                "accident_type": "항공기 준사고",
-                "operator": "진에어",
-                "aircraft_type": "B737-800",
-                "location": "인천국제공항",
-            },
-        ]
-
-        # 최근 30일 이내 사고 추가 (랜덤)
-        if random.random() > 0.7:
-            recent_date = (now - timedelta(days=random.randint(1, 30))).strftime("%Y/%m/%d")
-            airports = ["김포국제공항", "인천국제공항", "김해국제공항", "제주국제공항"]
-            mock_accidents.insert(0, {
-                "accident_id": str(326 + random.randint(1, 10)),
-                "occurrence_date": recent_date,
-                "report_date": "",
-                "accident_type": random.choice(["항공기 준사고", "항공기 사고"]),
-                "operator": random.choice(["대한항공", "아시아나항공", "제주항공"]),
-                "aircraft_type": random.choice(["B737-800", "A321", "B777"]),
-                "location": random.choice(airports),
-            })
-
-        return mock_accidents
 
     def get_summary(self, data_list: List[Dict[str, Any]]) -> Dict[str, Any]:
         """수집 데이터 요약"""

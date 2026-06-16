@@ -358,6 +358,7 @@ async def get_airport_risk(
             "score": cat_score.score,
             "level": cat_score.level,
             "factors": cat_score.factors,
+            "has_data": cat_score.has_data,
         }
 
     return {

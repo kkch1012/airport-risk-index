@@ -82,8 +82,8 @@ class NewsCrawler(BaseCollector):
                 continue
 
         if not all_articles:
-            self.logger.warning("뉴스 수집 실패, 목업 사용")
-            return self._get_mock_data()
+            self.logger.warning("뉴스 수집 실패 → 데이터 없음")
+            return []
 
         self.logger.info("뉴스 %d건 수집 (중복 제거 + 날짜 필터 후)", len(all_articles))
         return all_articles
@@ -241,37 +241,3 @@ class NewsCrawler(BaseCollector):
         """고유 ID 생성"""
         content = f"{raw_data.get('title', '')}{raw_data.get('link', '')}"
         return hashlib.sha256(content.encode()).hexdigest()[:16]
-
-    def _get_mock_data(self) -> List[Dict[str, Any]]:
-        """목업 뉴스 데이터"""
-        import random
-        now = datetime.now()
-        random.seed(now.strftime("%Y%m%d%H"))
-
-        mock_titles = [
-            "인천공항 짙은 안개로 항공기 50편 지연",
-            "김해공항 활주로 보수공사로 일부 결항",
-            "태풍 '카눈' 북상, 제주공항 결항 가능성",
-            "김포공항 보안검색대에서 흉기 발견",
-            "코로나 변이 확산에 인천공항 검역 강화",
-            "대구공항 인근 조류충돌 준사고 발생",
-            "제주항공 여객기 엔진결함으로 긴급회항",
-            "청주공항 폭설로 활주로 일시 폐쇄",
-            "인천공항 입국장에서 밀수품 대량 적발",
-            "아시아나항공 난기류 사고로 승객 부상",
-        ]
-
-        articles = []
-        sample_count = random.randint(3, 6)
-        for title in random.sample(mock_titles, sample_count):
-            hours_ago = random.randint(1, 48)
-            pub_time = (now - timedelta(hours=hours_ago))
-            articles.append({
-                "article_id": hashlib.sha256(title.encode()).hexdigest()[:16],
-                "title": title,
-                "link": f"https://news.example.com/{random.randint(10000, 99999)}",
-                "published_at": pub_time.strftime("%a, %d %b %Y %H:%M:%S GMT"),
-                "source": random.choice(["연합뉴스", "MBC", "KBS", "SBS", "조선일보"]),
-            })
-
-        return articles

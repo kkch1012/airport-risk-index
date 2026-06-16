@@ -79,8 +79,8 @@ class SecurityThreatCollector(BaseCollector):
         all_data.extend(immigration_data)
 
         if not all_data:
-            self.logger.warning("보안위협 수집 실패, 목업 사용")
-            return self._get_mock_data()
+            self.logger.warning("보안위협 수집 실패 → 데이터 없음")
+            return []
 
         self.logger.info("보안위협 %d건 수집", len(all_data))
         return all_data
@@ -321,96 +321,3 @@ class SecurityThreatCollector(BaseCollector):
             # 불법입국: 건수에 비례, 50건 이상이면 최대
             return min(100, count * 2.0)
         return 0
-
-    def _get_mock_data(self) -> List[Dict[str, Any]]:
-        """목업 보안위협 데이터"""
-        import random
-
-        now = datetime.now()
-        random.seed(now.strftime("%Y%m%d%H"))
-
-        mock_events = [
-            # 뉴스 기반 이벤트
-            {
-                "source_type": "news",
-                "threat_type": "terror",
-                "title": "인천공항 폭발물 의심 가방 발견… 확인 결과 오인 신고",
-                "link": "https://news.example.com/10001",
-                "published_at": (now - timedelta(hours=random.randint(1, 24))).strftime(
-                    "%a, %d %b %Y %H:%M:%S GMT"
-                ),
-                "collected_at": now.isoformat(),
-            },
-            {
-                "source_type": "news",
-                "threat_type": "terror",
-                "title": "김포공항 보안검색대에서 위협 발언한 승객 체포",
-                "link": "https://news.example.com/10002",
-                "published_at": (now - timedelta(hours=random.randint(1, 48))).strftime(
-                    "%a, %d %b %Y %H:%M:%S GMT"
-                ),
-                "collected_at": now.isoformat(),
-            },
-            {
-                "source_type": "news",
-                "threat_type": "smuggling",
-                "title": "인천공항 입국장에서 마약 밀반입 적발",
-                "link": "https://news.example.com/10003",
-                "published_at": (now - timedelta(hours=random.randint(1, 72))).strftime(
-                    "%a, %d %b %Y %H:%M:%S GMT"
-                ),
-                "collected_at": now.isoformat(),
-            },
-            {
-                "source_type": "news",
-                "threat_type": "smuggling",
-                "title": "김해공항 금지품 반입 시도 적발 건수 증가",
-                "link": "https://news.example.com/10004",
-                "published_at": (now - timedelta(hours=random.randint(1, 48))).strftime(
-                    "%a, %d %b %Y %H:%M:%S GMT"
-                ),
-                "collected_at": now.isoformat(),
-            },
-            {
-                "source_type": "news",
-                "threat_type": "illegal_entry",
-                "title": "제주공항 위조여권 소지 외국인 적발",
-                "link": "https://news.example.com/10005",
-                "published_at": (now - timedelta(hours=random.randint(1, 72))).strftime(
-                    "%a, %d %b %Y %H:%M:%S GMT"
-                ),
-                "collected_at": now.isoformat(),
-            },
-            # 통계 기반 이벤트
-            {
-                "source_type": "customs",
-                "threat_type": "smuggling",
-                "title": "밀수단속 현황",
-                "count": random.randint(10, 60),
-                "year": str(now.year),
-                "category": "마약류",
-                "collected_at": now.isoformat(),
-            },
-            {
-                "source_type": "customs",
-                "threat_type": "smuggling",
-                "title": "밀수단속 현황",
-                "count": random.randint(5, 30),
-                "year": str(now.year),
-                "category": "총포류",
-                "collected_at": now.isoformat(),
-            },
-            {
-                "source_type": "immigration",
-                "threat_type": "illegal_entry",
-                "title": "불법체류 단속 현황",
-                "count": random.randint(5, 25),
-                "year": str(now.year),
-                "category": "불법입국",
-                "collected_at": now.isoformat(),
-            },
-        ]
-
-        # 3~6개 무작위 선택
-        sample_count = random.randint(3, min(6, len(mock_events)))
-        return random.sample(mock_events, sample_count)

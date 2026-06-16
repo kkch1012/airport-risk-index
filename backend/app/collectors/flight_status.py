@@ -13,7 +13,9 @@ API: 한국공항공사_항공기 운항정보 / 실시간 항공운항 현황 �
 
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote
+
+import defusedxml.ElementTree as ET
 
 from app.collectors.base import BaseCollector
 from app.config import settings
@@ -153,10 +155,15 @@ class FlightStatusCollector(BaseCollector):
             raise
 
     async def collect(self) -> List[Dict[str, Any]]:
-        """모든 공항의 운항정보 수집"""
+        """모든 공항의 운항정보 수집.
+
+        한국공항공사(data.go.kr) 키가 있으면 실시간 운항현황을 사용하고,
+        키가 없거나 실패하면 무료 공개 뉴스(Google News RSS) 기반 지연 신호로 폴백한다.
+        둘 다 실패하면 빈 리스트(데이터 없음) — 난수 목업은 생성하지 않는다.
+        """
         if not self.api_key:
-            self.logger.warning("API 키가 설정되지 않았습니다. 목업 데이터를 반환합니다.")
-            return self._get_mock_data()
+            self.logger.warning("한국공항공사 API 키 없음 → 뉴스 기반 지연 신호 폴백 사용")
+            return await self._collect_news_fallback()
 
         results = []
         search_date = datetime.now().strftime("%Y%m%d")
@@ -194,12 +201,12 @@ class FlightStatusCollector(BaseCollector):
                 self.logger.error(f"공항 {airport_code} 데이터 수집 실패: {e}")
                 continue
 
-        # API 호출이 모두 실패한 경우 목업 데이터 반환
+        # API 호출이 모두 실패한 경우 뉴스 기반 폴백
         if not results or all(
             not r["departures"] and not r["arrivals"] for r in results
         ):
-            self.logger.warning("API 데이터 수집 실패, 목업 데이터로 대체")
-            return self._get_mock_data()
+            self.logger.warning("운항정보 API 수집 실패 → 뉴스 기반 지연 신호 폴백")
+            return await self._collect_news_fallback()
 
         self.logger.info(f"운항정보 {len(results)}개 공항 수집 완료")
         return results
@@ -437,74 +444,85 @@ class FlightStatusCollector(BaseCollector):
 
         return True
 
-    def _get_mock_data(self) -> List[Dict[str, Any]]:
-        """API 키 없을 때 사용할 목업 데이터"""
-        import random
+    # 뉴스 기반 폴백 설정 (무료 공개 소스)
+    NEWS_RSS = "https://news.google.com/rss/search"
 
+    async def _collect_news_fallback(self) -> List[Dict[str, Any]]:
+        """Google News RSS 기반 운항 지연 신호 폴백 (무료, 키 불필요)
+
+        주의: 이 폴백의 delay_rate/cancellation_rate는 실측 통계가 아니라
+        최근 7일 뉴스 신호량으로 추정한 '코스 프록시(coarse proxy)'다.
+        실측 지연율은 한국공항공사(data.go.kr) 키가 있을 때만 산출된다.
+        뉴스 신호가 전혀 없으면 해당 공항은 결과에서 제외(=데이터 없음)된다.
+        """
         now = datetime.now()
         search_date = now.strftime("%Y%m%d")
-
-        # 날짜 기반 시드로 일관성 유지
-        random.seed(now.strftime("%Y%m%d"))
-
-        results = []
-
-        # 공항별 기본 운항 규모 (실제와 유사하게)
-        airport_scale = {
-            "GMP": {"flights": 180, "base_delay": 8},   # 김포: 대규모
-            "PUS": {"flights": 120, "base_delay": 10},  # 김해: 대규모
-            "CJU": {"flights": 200, "base_delay": 12},  # 제주: 최대 규모
-            "TAE": {"flights": 40, "base_delay": 6},    # 대구: 중규모
-            "CJJ": {"flights": 50, "base_delay": 7},    # 청주: 중규모
-            "KWJ": {"flights": 25, "base_delay": 5},    # 광주: 소규모
-            "RSU": {"flights": 15, "base_delay": 4},    # 여수: 소규모
-            "USN": {"flights": 20, "base_delay": 5},    # 울산: 소규모
-            "KPO": {"flights": 10, "base_delay": 3},    # 포항: 소규모
-            "WJU": {"flights": 8, "base_delay": 3},     # 원주: 소규모
-            "YNY": {"flights": 12, "base_delay": 4},    # 양양: 소규모
-            "HIN": {"flights": 10, "base_delay": 3},    # 사천: 소규모
-            "KUV": {"flights": 5, "base_delay": 2},     # 군산: 최소규모
-            "MWX": {"flights": 30, "base_delay": 6},    # 무안: 중규모
-        }
+        results: List[Dict[str, Any]] = []
 
         for airport_code, airport_name in self.DOMESTIC_AIRPORTS.items():
-            scale = airport_scale.get(airport_code, {"flights": 20, "base_delay": 5})
+            try:
+                delay_hits, cancel_hits = await self._news_disruption_signal(airport_name)
+            except Exception as e:
+                self.logger.warning("뉴스 신호 수집 실패 (%s): %s", airport_code, e)
+                continue
 
-            # 일일 운항편수 (±20% 변동)
-            total_flights = int(scale["flights"] * random.uniform(0.8, 1.2))
+            # 신호가 전혀 없으면 제외 (no-data) — 0으로 채워 위험을 왜곡하지 않음
+            if delay_hits == 0 and cancel_hits == 0:
+                continue
 
-            # 지연율 (기본 ±5% 변동)
-            base_delay_rate = scale["base_delay"]
-            delay_rate = max(0, base_delay_rate + random.uniform(-3, 5))
-
-            # 결항율 (보통 1-3%)
-            cancellation_rate = random.uniform(0.5, 3.0)
-
-            # 평균 지연시간 (15-45분)
-            avg_delay = random.uniform(15, 45) if delay_rate > 5 else random.uniform(5, 20)
-
-            # 지연/결항 편수 계산
-            delayed_flights = int(total_flights * delay_rate / 100)
-            cancelled_flights = int(total_flights * cancellation_rate / 100)
+            delay_rate = self._signal_to_rate(delay_hits, buckets=((6, 25.0), (3, 16.0), (1, 8.0)))
+            cancel_rate = self._signal_to_rate(cancel_hits, buckets=((3, 5.0), (1, 2.0)))
 
             results.append({
                 "airport_code": airport_code,
                 "airport_name": airport_name,
                 "date": search_date,
-                "departures": [],  # 목업에서는 상세 데이터 생략
+                "departures": [],
                 "arrivals": [],
-                "total_flights": total_flights,
-                "departure_count": total_flights // 2,
-                "arrival_count": total_flights // 2,
-                "delayed_flights": delayed_flights,
-                "cancelled_flights": cancelled_flights,
-                "delay_rate": round(delay_rate, 2),
-                "cancellation_rate": round(cancellation_rate, 2),
-                "average_delay_minutes": round(avg_delay, 1),
+                "total_flights": 0,  # 뉴스 폴백은 운항편수 미상
+                "departure_count": 0,
+                "arrival_count": 0,
+                "delayed_flights": 0,
+                "cancelled_flights": 0,
+                "delay_rate": delay_rate,
+                "cancellation_rate": cancel_rate,
+                "average_delay_minutes": 0,
                 "collected_at": now.isoformat(),
+                "is_proxy": True,
+                "proxy_source": "Google News RSS",
             })
 
+        self.logger.info("뉴스 기반 지연 신호 폴백: %d개 공항", len(results))
         return results
+
+    async def _news_disruption_signal(self, airport_name: str) -> tuple:
+        """공항명으로 최근 7일 운항장애 뉴스 신호량 집계 (지연건수, 결항건수)"""
+        query = f"{airport_name} (지연 OR 결항 OR 결항) when:7d"
+        url = f"{self.NEWS_RSS}?q={quote(query)}&hl=ko&gl=KR&ceid=KR:ko"
+
+        response = await self.client.get(url, timeout=20.0)
+        response.raise_for_status()
+        root = ET.fromstring(response.text)
+
+        delay_hits = 0
+        cancel_hits = 0
+        for item in root.iter("item"):
+            title = (item.findtext("title") or "")
+            if airport_name not in title:
+                continue  # 제목에 공항명이 없으면 관련도 낮음 → 제외
+            if "지연" in title:
+                delay_hits += 1
+            if "결항" in title or "취소" in title:
+                cancel_hits += 1
+        return delay_hits, cancel_hits
+
+    @staticmethod
+    def _signal_to_rate(hits: int, buckets) -> float:
+        """뉴스 신호 건수를 코스 프록시 비율(%)로 변환"""
+        for threshold, rate in buckets:
+            if hits >= threshold:
+                return rate
+        return 0.0
 
     def get_summary(self, data_list: List[Dict[str, Any]]) -> Dict[str, Any]:
         """

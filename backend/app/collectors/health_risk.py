@@ -8,7 +8,7 @@ API: 질병관리청_검역관리지역정보
 국내로 유입될 가능성이 있는 지역으로서 검역법 제5조에 따라 지정된 지역입니다.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlencode
 
@@ -41,6 +41,7 @@ class HealthRiskCollector(BaseCollector):
         "POLIOVIRUS": {"name": "폴리오", "risk_score": 80},
         "LASSAFEVER": {"name": "라싸열", "risk_score": 90},
         "MARBURG": {"name": "마버그열", "risk_score": 95},
+        "NIPAH": {"name": "니파바이러스감염증", "risk_score": 85},
     }
 
     # 질병 이름으로 코드 찾기 (한글 이름 매핑)
@@ -116,6 +117,69 @@ class HealthRiskCollector(BaseCollector):
         "파키스탄": "PK", "방글라데시": "BD", "아프가니스탄": "AF",
     }
 
+    # WHO Disease Outbreak News JSON API (무료, 키 불필요) — data.go.kr 폴백용
+    # OData 형식: {"value": [{"Title","PublicationDate","ItemDefaultUrl",...}]}
+    WHO_DON_API = "https://www.who.int/api/news/diseaseoutbreaknews"
+    # 폴백에서 고려할 최근 발생 기간 (일)
+    WHO_DON_LOOKBACK_DAYS = 180
+
+    # WHO DON 제목의 영문 질병명 → 내부 질병 코드 (부분 일치)
+    DISEASE_EN_KEYWORDS = {
+        "marburg": "MARBURG",
+        "nipah": "NIPAH",
+        "ebola": "EBOLA",
+        "cholera": "CHOLERA",
+        "mpox": "MPOX",
+        "monkeypox": "MPOX",
+        "middle east respiratory": "MERS",
+        "mers": "MERS",
+        "yellow fever": "YELLOWFEVER",
+        "plague": "PLAGUE",
+        "lassa": "LASSAFEVER",
+        "avian influenza": "AVIANFLU",
+        "bird flu": "AVIANFLU",
+        "h5n1": "AVIANFLU",
+        "h7n9": "AVIANFLU",
+        "h5n5": "AVIANFLU",
+        "influenza a": "AVIANFLU",
+        "poliomyelitis": "POLIOVIRUS",
+        "polio": "POLIOVIRUS",
+        "dengue": "DENGUE",
+        "zika": "ZIKA",
+        "chikungunya": "CHIKUNGUNYA",
+        "malaria": "MALARIA",
+        "covid": "COVID19",
+        "sars-cov-2": "COVID19",
+    }
+
+    # WHO DON 제목의 영문 국가명 → ISO 코드 (부분 일치)
+    COUNTRY_EN_TO_ISO = {
+        "japan": "JP", "china": "CN", "taiwan": "TW", "hong kong": "HK", "macao": "MO",
+        "viet nam": "VN", "vietnam": "VN", "thailand": "TH", "philippines": "PH",
+        "singapore": "SG", "malaysia": "MY", "indonesia": "ID", "cambodia": "KH",
+        "lao": "LA", "myanmar": "MM", "india": "IN", "nepal": "NP", "sri lanka": "LK",
+        "australia": "AU", "new zealand": "NZ", "guam": "GU", "fiji": "FJ", "palau": "PW",
+        "united states": "US", "canada": "CA", "mexico": "MX", "brazil": "BR",
+        "united kingdom": "GB", "france": "FR", "germany": "DE", "italy": "IT",
+        "spain": "ES", "netherlands": "NL", "switzerland": "CH", "austria": "AT",
+        "czech": "CZ", "poland": "PL", "russia": "RU", "russian federation": "RU",
+        "türkiye": "TR", "turkey": "TR", "united arab emirates": "AE", "qatar": "QA",
+        "saudi arabia": "SA", "uzbekistan": "UZ", "kazakhstan": "KZ",
+        "egypt": "EG", "ethiopia": "ET", "kenya": "KE", "south africa": "ZA",
+        "mongolia": "MN",
+        # 아프리카 (WHO DON 빈출)
+        "democratic republic of the congo": "CD", "congo": "CG", "nigeria": "NG",
+        "ghana": "GH", "sudan": "SD", "uganda": "UG", "united republic of tanzania": "TZ",
+        "tanzania": "TZ", "somalia": "SO", "guinea": "GN", "liberia": "LR",
+        "sierra leone": "SL", "mali": "ML", "rwanda": "RW", "burundi": "BI",
+        "equatorial guinea": "GQ", "comoros": "KM", "chad": "TD", "niger": "NE",
+        # 중남미
+        "colombia": "CO", "peru": "PE", "ecuador": "EC", "bolivia": "BO",
+        "argentina": "AR", "paraguay": "PY",
+        # 아시아 추가
+        "pakistan": "PK", "bangladesh": "BD", "afghanistan": "AF",
+    }
+
     def __init__(self, api_key: str = None):
         super().__init__()
         self.api_key = api_key or settings.DATA_GO_KR_API_KEY
@@ -156,10 +220,15 @@ class HealthRiskCollector(BaseCollector):
             raise
 
     async def collect(self) -> List[Dict[str, Any]]:
-        """검역관리지역 데이터 수집"""
+        """검역관리지역 데이터 수집.
+
+        질병관리청(data.go.kr) 키가 있으면 검역관리지역을 사용하고,
+        키가 없거나 실패하면 무료 공개 WHO Disease Outbreak News RSS로 폴백한다.
+        둘 다 실패하면 빈 리스트(데이터 없음) — 난수 목업은 생성하지 않는다.
+        """
         if not self.api_key:
-            self.logger.warning("API 키가 설정되지 않았습니다. 목업 데이터를 반환합니다.")
-            return self._get_mock_data()
+            self.logger.warning("질병관리청 API 키 없음 → WHO DON RSS 폴백 사용")
+            return await self._collect_who_don_fallback()
 
         results = []
         page = 1
@@ -220,13 +289,17 @@ class HealthRiskCollector(BaseCollector):
 
             except Exception as e:
                 self.logger.error(f"페이지 {page} 수집 실패: {e}")
-                # API 키 오류 등의 경우 목업 데이터로 대체
+                # API 오류 시 WHO DON RSS로 폴백
                 if not results:
-                    return self._get_mock_data()
+                    return await self._collect_who_don_fallback()
                 break
 
+        if not results:
+            self.logger.warning("검역관리지역 응답 없음 → WHO DON RSS 폴백 사용")
+            return await self._collect_who_don_fallback()
+
         self.logger.info(f"검역관리지역 {len(results)}건 수집 완료")
-        return results if results else self._get_mock_data()
+        return results
 
     def transform(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -353,63 +426,99 @@ class HealthRiskCollector(BaseCollector):
         except (ValueError, TypeError):
             return 1.0
 
-    def _get_mock_data(self) -> List[Dict[str, Any]]:
-        """API 키 없을 때 사용할 목업 데이터"""
-        import random
+    async def _collect_who_don_fallback(self) -> List[Dict[str, Any]]:
+        """WHO Disease Outbreak News(JSON API)에서 감염병 발생 정보 수집 (무료, 키 불필요)
+
+        제목 형식 예: "Marburg virus disease – United Republic of Tanzania"
+        제목에서 질병과 국가를 추출해 내부 코드로 매핑한다.
+        최근 WHO_DON_LOOKBACK_DAYS 이내 + 취항 대상국(TARGET_COUNTRIES) 항목만 유지한다.
+        """
+        try:
+            response = await self.client.get(
+                self.WHO_DON_API,
+                params={
+                    "$orderby": "PublicationDate desc",
+                    "$top": "80",
+                    "$select": "Title,PublicationDate,ItemDefaultUrl",
+                },
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except Exception as e:
+            self.logger.warning("WHO DON API 수집 실패 (%s) → 데이터 없음", e)
+            return []
+
+        items = payload.get("value", []) if isinstance(payload, dict) else []
+        if not items:
+            self.logger.warning("WHO DON API 응답 비어있음 → 데이터 없음")
+            return []
 
         now = datetime.now()
-        random.seed(now.strftime("%Y%m%d"))
+        cutoff = now - timedelta(days=self.WHO_DON_LOOKBACK_DAYS)
+        now_iso = now.isoformat()
+        results: List[Dict[str, Any]] = []
 
-        mock_results = []
+        for item in items:
+            title = (item.get("Title") or "").strip()
+            if not title:
+                continue
 
-        # 실제 검역관리지역과 유사한 목업 데이터
-        mock_quarantine_data = [
-            # 아프리카 - 에볼라, 콜레라 등
-            {"country": "콩고민주공화국", "disease": "에볼라바이러스병", "risk": 85},
-            {"country": "기니", "disease": "에볼라바이러스병", "risk": 75},
-            {"country": "우간다", "disease": "에볼라바이러스병", "risk": 70},
-            # 동남아 - 뎅기열, 지카, 콜레라
-            {"country": "필리핀", "disease": "콜레라", "risk": 55},
-            {"country": "인도네시아", "disease": "뎅기열", "risk": 45},
-            {"country": "베트남", "disease": "뎅기열", "risk": 40},
-            {"country": "태국", "disease": "뎅기열", "risk": 40},
-            # 중동 - MERS
-            {"country": "아랍에미리트", "disease": "중동호흡기증후군", "risk": 50},
-            {"country": "카타르", "disease": "중동호흡기증후군", "risk": 45},
-            # 남미 - 황열, 지카
-            {"country": "브라질", "disease": "황열", "risk": 55},
-            {"country": "브라질", "disease": "지카바이러스감염증", "risk": 50},
-            # 아시아 - 엠폭스
-            {"country": "일본", "disease": "엠폭스", "risk": 35},
-            {"country": "중국", "disease": "엠폭스", "risk": 40},
-            # 아프리카 추가
-            {"country": "나이지리아", "disease": "콜레라", "risk": 60},
-            {"country": "에티오피아", "disease": "콜레라", "risk": 55},
-            # 조류인플루엔자
-            {"country": "중국", "disease": "조류인플루엔자인체감염증", "risk": 50},
-        ]
+            pub_dt = self._parse_iso_date(item.get("PublicationDate", ""))
+            if pub_dt and pub_dt < cutoff:
+                continue  # 오래된 발생 제외
 
-        for item in mock_quarantine_data:
-            country_code = self._get_country_code(item["country"])
-            disease_code = self._get_disease_code(item["disease"])
+            disease_code = self._match_disease_en(title)
+            country_name, country_code = self._match_country_en(title)
 
-            # 약간의 랜덤 변동
-            risk_variation = random.uniform(-5, 5)
-            risk_score = max(0, min(100, item["risk"] + risk_variation))
+            # 대상국(직항 노선국)만 유지 — 그 외 지역은 보건위험 계산에서 제외
+            if not country_code or country_code not in self.TARGET_COUNTRIES:
+                continue
 
-            mock_results.append({
-                "country_name": item["country"],
+            results.append({
+                "country_name": country_name or self.TARGET_COUNTRIES.get(country_code, ""),
                 "country_code": country_code,
-                "disease_name": item["disease"],
+                "disease_name": title.split("–")[0].split(" - ")[0].strip() or title,
                 "disease_code": disease_code,
-                "designation_date": (now.replace(day=1)).strftime("%Y-%m-%d"),
+                "designation_date": pub_dt.strftime("%Y-%m-%d") if pub_dt else "",
                 "release_date": "",
                 "is_active": True,
-                "risk_group": "",
-                "collected_at": now.isoformat(),
+                "risk_group": "WHO DON",
+                "collected_at": now_iso,
             })
 
-        return mock_results
+        self.logger.info("WHO DON API: 대상국 %d건 수집", len(results))
+        return results
+
+    def _match_disease_en(self, text: str) -> str:
+        """영문 제목에서 질병 코드 추출"""
+        low = text.lower()
+        for kw, code in self.DISEASE_EN_KEYWORDS.items():
+            if kw in low:
+                return code
+        return "UNKNOWN"
+
+    def _match_country_en(self, text: str) -> tuple:
+        """영문 제목에서 국가명/ISO 코드 추출 (가장 긴 일치 우선)"""
+        low = text.lower()
+        best_name, best_code, best_len = "", "", 0
+        for name, code in self.COUNTRY_EN_TO_ISO.items():
+            if name in low and len(name) > best_len:
+                best_name, best_code, best_len = name, code, len(name)
+        return (best_name.title(), best_code)
+
+    @staticmethod
+    def _parse_iso_date(value: str) -> Optional[datetime]:
+        """WHO PublicationDate(ISO, 예: '2026-03-20T00:00:00Z') → datetime (실패 시 None)"""
+        if not value:
+            return None
+        v = value.strip().replace("Z", "")
+        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(v[:19] if "T" in v else v[:10], fmt)
+            except ValueError:
+                continue
+        return None
 
     def get_summary(self, data_list: List[Dict[str, Any]]) -> Dict[str, Any]:
         """

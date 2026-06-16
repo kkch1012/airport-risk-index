@@ -4,6 +4,87 @@
 
 본 문서는 공항 위험지수를 산출하는 방법론과 알고리즘을 설명합니다.
 
+> ⚠️ **문서 구성 안내:** 아래 "실제 구현 현황(2026-06)" 섹션이 현재 코드(`app/services/risk_calculator.py`)와
+> 일치하는 **권위 있는 설명**입니다. 그 이후의 정규화/상관분석/ML 가중치/백테스트 섹션은 **향후 설계 참고용**이며
+> 아직 구현되지 않았거나 단순화되어 있습니다(혼잡도·시설노후도 등 일부 요인은 제외됨).
+
+---
+
+## 실제 구현 현황 (2026-06 크롤링+공개데이터 전환)
+
+### A. 카테고리 가중치 (`CATEGORY_WEIGHTS`)
+
+| 카테고리 | 코드 | 가중치 |
+|----------|------|--------|
+| 항공안전 | aviation | 0.25 |
+| 보안위협 | security | 0.20 |
+| 기상위험 | weather | 0.20 |
+| 보건위험 | health | 0.15 |
+| 운영위험 | operational | 0.10 |
+| 외부요인 | external | 0.10 |
+
+### B. has_data 플래그 & 가중치 재정규화 (핵심)
+
+각 카테고리 점수(`CategoryScore`)는 `has_data: bool` 필드를 가집니다.
+데이터 소스에서 유효한 데이터를 얻지 못하면 `has_data=False`가 되고, **종합점수 계산에서 제외**됩니다.
+
+```python
+# 가용(has_data=True) 카테고리만으로 가중치 재정규화
+available = {code: cat for code, cat in categories.items() if cat.has_data}
+weight_sum = sum(active_weights[code] for code in available)
+total_score = (
+    sum(cat.score * active_weights[code] for code, cat in available.items()) / weight_sum
+    if weight_sum > 0 else 0.0   # 가용 데이터가 전혀 없으면 종합점수 = 0
+)
+```
+
+- **가짜 점수 금지:** 과거 `random.uniform()` 기반 mock은 전면 제거됨. 데이터 없음 = 정직하게 제외.
+- **예외(실제 LOW 판정):** 국제선이 없는 국내 전용 공항의 외부요인/보건위험은 데이터 없이도
+  실제 낮은 위험이므로 `has_data=True`로 유지(score≈5.0). 항공안전은 입력이 비면 `has_data=False`,
+  데이터는 있으나 항공기 사고가 없으면 `has_data=True`.
+
+### C. 운영위험 재정의 (지연 중심)
+
+혼잡도·시설노후도·파업은 **공항 운영자 내부데이터**라 무료 공개데이터/크롤링으로 확보 불가 → 제외.
+공개데이터로 산출 가능한 지표만 사용:
+
+```python
+delay_score  = min(65, delay_rate * 2.5)    # 지연율 주축 (0–65), 지연율 26%↑ 이면 최대
+cancel_score = min(35, cancel_rate * 5)     # 결항율 보조 (0–35), 결항율 7%↑ 이면 최대
+operational_score = delay_score + cancel_score
+# 운항 데이터 소스 없음 → score=10.0, has_data=False
+```
+
+### D. 카테고리별 점수 산식 요약 (실제 구현)
+
+| 카테고리 | 산식 요약 | 무데이터 처리 |
+|----------|-----------|----------------|
+| weather | 풍속35% + 강수형태30% + 강수량25% + 습도10% (가용 요인 가중평균) | factors 없으면 has_data=False |
+| aviation | 사고이력(0–40) + 준사고(0–30) + 심각도(0–30) | 입력 빔→has_data=False, 사고無→True |
+| security | 테러(0–40) + 밀수(0–30) + 불법입국(0–30) (각 max60%+avg40%) | 빈 데이터→score=5, has_data=False |
+| health | 감염병경보60% + 검역지역수20% + 근접도20% | 국제선無→True, 데이터無→False |
+| external | 여행경보50% + 국제정세15% + 해외기상20% + 해외항공15% | 국제선無→True, 데이터無→False |
+| operational | 위 C 참조 | 운항데이터無→score=10, has_data=False |
+
+### E. 위험등급
+
+| 등급 | 점수 범위 |
+|------|-----------|
+| LOW | 0 ≤ s < 25 |
+| MODERATE | 25 ≤ s < 50 |
+| HIGH | 50 ≤ s < 75 |
+| CRITICAL | 75 ≤ s ≤ 100 |
+
+### F. 폴백 우선순위
+
+데이터는 **① 공개 API → ② 무료 크롤링 폴백 → ③ 빈 리스트(데이터 없음)** 순으로 확보합니다.
+뉴스 기반 폴백(운항 지연·여행경보)은 실측이 아닌 추정 프록시로 `is_proxy: True`가 붙습니다.
+소스별 상세는 [DATA_SOURCES.md](DATA_SOURCES.md) 참조.
+
+---
+
+> 이하 섹션은 **향후 설계 참고용**입니다. (현재 코드와 다를 수 있음 — 특히 혼잡도/시정/ML 가중치 부분)
+
 ---
 
 ## 위험지수 산출 프레임워크

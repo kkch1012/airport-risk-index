@@ -13,7 +13,9 @@ API: 외교부_국가·지역별 여행경보 목록 조회 (0404 대륙정보)
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote
+
+import defusedxml.ElementTree as ET
 
 from app.collectors.base import BaseCollector
 from app.config import settings
@@ -146,10 +148,15 @@ class TravelAdvisoryCollector(BaseCollector):
             raise
 
     async def collect(self) -> List[Dict[str, Any]]:
-        """모든 국가의 여행경보 데이터 수집"""
+        """모든 국가의 여행경보 데이터 수집.
+
+        외교부(data.go.kr) 키가 있으면 공식 여행경보를 사용하고,
+        키가 없거나 실패하면 무료 공개 뉴스(Google News RSS) 기반 불안정 신호로 폴백한다.
+        둘 다 실패하면 빈 리스트(데이터 없음) — 난수 목업은 생성하지 않는다.
+        """
         if not self.api_key:
-            self.logger.warning("API 키가 설정되지 않았습니다. 목업 데이터를 반환합니다.")
-            return self._get_mock_data()
+            self.logger.warning("외교부 API 키 없음 → 뉴스 기반 불안정 신호 폴백 사용")
+            return await self._collect_news_fallback()
 
         results = []
         page = 1
@@ -197,6 +204,10 @@ class TravelAdvisoryCollector(BaseCollector):
             except Exception as e:
                 self.logger.error(f"페이지 {page} 수집 실패: {e}")
                 break
+
+        if not results:
+            self.logger.warning("여행경보 API 결과 없음 → 뉴스 기반 불안정 신호 폴백")
+            return await self._collect_news_fallback()
 
         self.logger.info(f"여행경보 {len(results)}개국 수집 완료")
         return results
@@ -249,40 +260,72 @@ class TravelAdvisoryCollector(BaseCollector):
 
         return True
 
-    def _get_mock_data(self) -> List[Dict[str, Any]]:
-        """API 키 없을 때 사용할 목업 데이터"""
-        import random
+    # 뉴스 기반 폴백 설정 (무료 공개 소스)
+    NEWS_RSS = "https://news.google.com/rss/search"
+    # 불안정 신호 키워드 (제목에 포함 시 가중)
+    INSTABILITY_KEYWORDS = ["테러", "내전", "쿠데타", "시위", "폭동", "교전", "비상사태", "여행경보", "납치"]
 
-        mock_results = []
+    async def _collect_news_fallback(self) -> List[Dict[str, Any]]:
+        """Google News RSS 기반 국가 불안정 신호 폴백 (무료, 키 불필요)
+
+        주의: 이 폴백의 경보단계는 외교부 공식 경보가 아니라 최근 7일 뉴스
+        불안정 신호로 추정한 '보수적 프록시'다. 오탐으로 인한 과대경보를 막기 위해
+        최대 2단계(여행자제)까지만 추정하며, 신호가 없는 국가는 결과에서 제외한다.
+        실제 3·4단계(출국권고/여행금지)는 외교부(data.go.kr) 키가 있을 때만 산출된다.
+        """
         now = datetime.now()
-
-        # 시드를 날짜 기반으로 설정하여 같은 날 같은 결과
-        random.seed(now.strftime("%Y%m%d"))
+        results: List[Dict[str, Any]] = []
 
         for country_code, country_name in self.TARGET_COUNTRIES.items():
-            # 대부분의 국가는 1단계 또는 경보 없음
-            # 일부 국가만 높은 경보
-            if country_code in ["RU", "MM", "ET"]:
-                alarm_lvl = random.choice(["2", "3"])
-            elif country_code in ["UA", "SY", "AF"]:
-                alarm_lvl = "4"
-            else:
-                alarm_lvl = random.choices(["", "1", "2"], weights=[0.3, 0.5, 0.2])[0]
+            try:
+                hits = await self._news_instability_signal(country_name)
+            except Exception as e:
+                self.logger.warning("불안정 신호 수집 실패 (%s): %s", country_code, e)
+                continue
 
-            mock_results.append({
+            # 보수적 매핑: 4건 이상 → 2단계, 2~3건 → 1단계, 그 외 제외
+            if hits >= 4:
+                alarm_lvl = "2"
+            elif hits >= 2:
+                alarm_lvl = "1"
+            else:
+                continue  # 신호 없음 → no-data (위험 미반영)
+
+            results.append({
                 "country_code": country_code,
                 "country_name": country_name,
                 "country_name_eng": "",
                 "alarm_lvl": alarm_lvl,
                 "continent_code": "",
                 "continent_name": self._get_continent(country_code),
-                "remark": f"{country_name} 여행 시 주의사항" if alarm_lvl else "",
-                "region_ty": "전지역" if alarm_lvl else "",
+                "remark": f"[뉴스 추정] 최근 7일 불안정 신호 {hits}건",
+                "region_ty": "전지역",
                 "written_dt": now.strftime("%Y-%m-%d"),
                 "collected_at": now.isoformat(),
+                "is_proxy": True,
+                "proxy_source": "Google News RSS",
             })
 
-        return mock_results
+        self.logger.info("뉴스 기반 불안정 신호 폴백: %d개국", len(results))
+        return results
+
+    async def _news_instability_signal(self, country_name: str) -> int:
+        """국가명으로 최근 7일 불안정 관련 뉴스 신호량 집계"""
+        keyword_group = " OR ".join(self.INSTABILITY_KEYWORDS)
+        query = f"{country_name} ({keyword_group}) when:7d"
+        url = f"{self.NEWS_RSS}?q={quote(query)}&hl=ko&gl=KR&ceid=KR:ko"
+
+        response = await self.client.get(url, timeout=20.0)
+        response.raise_for_status()
+        root = ET.fromstring(response.text)
+
+        hits = 0
+        for item in root.iter("item"):
+            title = item.findtext("title") or ""
+            # 제목에 국가명 + 불안정 키워드가 함께 있어야 카운트 (관련도 향상)
+            if country_name in title and any(k in title for k in self.INSTABILITY_KEYWORDS):
+                hits += 1
+        return hits
 
     def _get_continent(self, country_code: str) -> str:
         """국가 코드로 대륙명 조회"""

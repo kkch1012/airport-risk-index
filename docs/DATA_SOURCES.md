@@ -1,535 +1,154 @@
 # 데이터 소스 가이드
 
-## 개요
-
-본 문서는 공항 위험지수 시스템에서 사용하는 모든 데이터 소스와 수집 방법을 설명합니다.
+본 문서는 공항 위험지수 시스템이 실제로 사용하는 데이터 소스와 **폴백 우선순위**를 설명합니다.
 
 ---
 
-## 국내 데이터 소스
+## 데이터 확보 원칙 (2026-06 전환)
 
-### 1. 기상청 (기상 데이터)
+공항과의 외부 계약(SSO·운영자 내부데이터)이 불가하다는 전제 아래, **무료 공개 API + 웹 크롤링만으로**
+위험지수를 산출합니다. (data.go.kr·기상청 키는 "계약"이 아니라 무료 신청이므로 그대로 활용)
 
-#### API 정보
-| 항목 | 내용 |
-|------|------|
-| 제공처 | 기상청 기상자료개방포털 |
-| URL | https://data.kma.go.kr |
-| 인증 | API Key (무료 발급) |
-| 형식 | JSON, XML |
+각 수집기(collector)는 다음 순서로 동작합니다.
 
-#### 사용 API
 ```
-1. 항공기상관측(METAR) 조회
-   - 엔드포인트: /api/aviation/metar
-   - 데이터: 시정, 풍향, 풍속, 기온, 기압, 현재날씨
-
-2. 항공기상예보(TAF) 조회
-   - 엔드포인트: /api/aviation/taf
-   - 데이터: 6-24시간 예보
-
-3. 공항별 기상특보
-   - 엔드포인트: /api/aviation/warning
-   - 데이터: 강풍, 태풍, 대설 등 특보
+① 키가 있으면  → 공개 API (data.go.kr / 기상청)
+② 키 없음/실패 → 무료 크롤링 폴백 (키 불필요)
+③ 그래도 없음  → 빈 리스트 [] 반환 (= "데이터 없음")
 ```
 
-#### 수집 주기
-- METAR: 매 시간 (정시)
-- TAF: 6시간마다
-- 특보: 실시간 (발표 시)
+> **핵심: 데이터가 없을 때 `random.uniform()` 같은 가짜 점수를 생성하지 않습니다.**
+> 데이터가 없는 카테고리는 `has_data=False`로 표시되어 종합 위험지수 가중치에서 제외(재정규화)됩니다.
+> (점수 모델은 [RISK_MODEL.md](RISK_MODEL.md) 참조)
 
-#### 샘플 데이터
-```json
-{
-  "airport_code": "RKSI",
-  "observed_at": "2024-01-15T09:00:00Z",
-  "visibility": 9999,
-  "wind_direction": 270,
-  "wind_speed": 5,
-  "temperature": -3,
-  "dewpoint": -8,
-  "pressure": 1025,
-  "weather": "FEW020"
-}
-```
+뉴스 기반 폴백(운항 지연·여행경보)은 실측 통계가 아닌 **뉴스 신호량 기반 추정 프록시**이며,
+산출 항목에 `is_proxy: True` 플래그가 붙습니다.
 
 ---
 
-### 2. 공공데이터포털 (항공 통계)
+## 수집기별 소스 & 폴백
 
-#### API 정보
-| 항목 | 내용 |
-|------|------|
-| 제공처 | 공공데이터포털 |
-| URL | https://data.go.kr |
-| 인증 | API Key (무료) |
-| 형식 | JSON, XML |
+### 1. 기상위험 — `weather.py`
 
-#### 사용 API
-```
-1. 국내선 여객 운송실적
-   - 데이터: 공항별 승객수, 운항횟수
+| 단계 | 소스 | 비고 |
+|------|------|------|
+| 1차 API | 기상청 단기예보((구)동네예보) 조회서비스 | `data.go.kr` 15084084, 격자(nx,ny) 기반 |
+| 2차 폴백 | **aviationweather.gov METAR** (`/api/data/metar`) | 키 불필요. 국내공항 ICAO(RKSI 등)로 조회 |
+| 3차 | `[]` (데이터 없음) | 소규모 공항(원주/사천/군산 등)은 METAR 미보고 → 자동 no-data |
 
-2. 국제선 여객 운송실적
-   - 데이터: 노선별 승객수, 출발/도착국
+- METAR 폴백은 원문(`rawOb`)에서 강수현상을 정규식으로 파싱(`_present_weather_from_raw`).
+  `wxString` 필드가 비어오는 경우가 많기 때문.
+- 단위 변환: knots→m/s(×0.514444), 기온/이슬점→Magnus 식으로 습도 추정.
+- **라이브 검증됨** (15개 중 9개 공항 METAR 응답).
 
-3. 항공기 지연/결항 현황
-   - 데이터: 지연율, 결항율, 사유
-```
+### 2. 운영위험 — `flight_status.py`
 
-#### 수집 주기
-- 일별 통계: 매일 오전 6시
-- 월별 통계: 매월 10일
+| 단계 | 소스 | 비고 |
+|------|------|------|
+| 1차 API | 한국공항공사 운항정보 | `data.go.kr` 15000126 / 15113771 |
+| 2차 폴백 | **Google News RSS** 운항장애 신호 → **지연율 프록시** | `is_proxy: True` |
+| 3차 | `[]` (데이터 없음) | |
 
----
+- 폴백은 공항명 기준 뉴스 제목의 지연/결항 신호량을 버킷 매핑(`_signal_to_rate`).
+  - 지연율 버킷: hits≥6→25%, ≥3→16%, ≥1→8%
+  - 결항율 버킷: hits≥3→5%, ≥1→2%
+  - `total_flights: 0` (실측 운항편수 없음을 명시)
 
-### 3. 항공철도사고조사위원회 (ARAIB)
+### 3. 항공안전 — `aviation_safety.py`
 
-#### 정보
-| 항목 | 내용 |
-|------|------|
-| 제공처 | 항공철도사고조사위원회 |
-| URL | https://araib.molit.go.kr |
-| 형식 | 웹 크롤링 (PDF 보고서) |
+| 단계 | 소스 | 비고 |
+|------|------|------|
+| 1차 | 항공철도사고조사위원회(ARAIB) 게시판 크롤링 | `araib.molit.go.kr` |
+| 2차 | `[]` (데이터 없음) | mock 제거됨 |
 
-#### 수집 데이터
-```
-- 항공기 사고
-- 항공기 준사고
-- 항공안전장애
-- 조류충돌 (Bird Strike)
-- 활주로 침범 (Runway Incursion)
-```
+### 4. 보건위험 — `health_risk.py`
 
-#### 수집 방법
-```python
-# 크롤링 예시
-class ARAIBCollector(BaseCollector):
-    BASE_URL = "https://araib.molit.go.kr"
+| 단계 | 소스 | 비고 |
+|------|------|------|
+| 1차 API | 질병관리청 검역관리지역정보 | `data.go.kr` 15139251 |
+| 2차 폴백 | **WHO Disease Outbreak News JSON API** (`/api/news/diseaseoutbreaknews`) | 키 불필요 (OData) |
+| 3차 | `[]` (데이터 없음) | |
 
-    async def collect(self):
-        # 1. 사고 목록 페이지 크롤링
-        # 2. 각 사고 상세 페이지 파싱
-        # 3. PDF 보고서 다운로드 및 텍스트 추출
-        pass
-```
+- 기존 WHO DON **RSS는 폐지(404)**되어 JSON API로 교체함.
+- `$orderby=PublicationDate desc&$top=80`로 최신순 조회, **최근 180일(`WHO_DON_LOOKBACK_DAYS`)** + 취항 대상국만 유지.
+- 영문 질병/국가 매핑(`DISEASE_EN_KEYWORDS`, `COUNTRY_EN_TO_ISO`) 추가. NIPAH(니파바이러스) 포함.
+- **라이브 검증됨**.
 
-#### 수집 주기
-- 매일 1회 (새로운 보고서 확인)
+### 5. 외부요인(여행경보) — `travel_advisory.py`
 
----
+| 단계 | 소스 | 비고 |
+|------|------|------|
+| 1차 API | 외교부 0404 국가·지역별 여행경보 | `data.go.kr` 15095500 |
+| 2차 폴백 | **Google News RSS** 불안정 신호 → **경보단계 프록시** | `is_proxy: True` |
+| 3차 | `[]` (데이터 없음) | |
 
-### 4. 질병관리청 (보건 데이터)
+- 불안정 키워드: 테러/내전/쿠데타/시위/폭동/교전/비상사태/여행경보/납치.
+- **과대경보 방지**: 폴백은 최대 2단계(여행자제)까지만 추정. hits≥4→"2", hits≥2→"1", 그 외 제외.
+- **라이브 검증됨** (러시아/일본/미얀마 등).
 
-#### API 정보
-| 항목 | 내용 |
-|------|------|
-| 제공처 | 질병관리청 |
-| URL | https://kdca.go.kr |
-| 형식 | API + 크롤링 |
+### 6. 보안위협 — `security_threat.py`
 
-#### 수집 데이터
-```
-1. 감염병 발생 현황
-   - 코로나19, 원숭이두창, 콜레라 등
-   - 지역별 발생 건수
+| 단계 | 소스 | 비고 |
+|------|------|------|
+| 1차 | Google News RSS 키워드 스코어링 (테러/밀수/불법입국) | 공항 코드 자동 탐지 |
+| 2차 | `[]` (데이터 없음) | mock 제거됨 |
 
-2. 검역 현황
-   - 입국자 검역 건수
-   - 감염병 의심자 현황
+### 7. 뉴스 — `news_crawler.py`
 
-3. 감염병 위기경보
-   - 관심 → 주의 → 경계 → 심각
-```
-
-#### 수집 주기
-- 감염병 현황: 매일 1회
-- 위기경보: 실시간 (변경 시)
-
----
-
-### 5. 외교부 (여행경보)
-
-#### API 정보
-| 항목 | 내용 |
-|------|------|
-| 제공처 | 외교부 해외안전여행 |
-| URL | https://www.0404.go.kr |
-| 형식 | 웹 크롤링 / RSS |
-
-#### 수집 데이터
-```
-여행경보 단계:
-1단계: 여행유의 (남색)
-2단계: 여행자제 (황색)
-3단계: 출국권고 (적색)
-4단계: 여행금지 (흑색)
-```
-
-#### 활용
-- 출발/도착 국가의 위험도 평가
-- 외부요인 위험지수 산출
-
----
-
-### 6. 관세청 (밀수 통계)
-
-#### 정보
-| 항목 | 내용 |
-|------|------|
-| 제공처 | 관세청 |
-| URL | https://customs.go.kr |
-| 형식 | 공개 통계 / 크롤링 |
-
-#### 수집 데이터
-```
-- 마약류 밀수 적발 현황
-- 밀수품 적발 통계
-- 공항별 적발 건수
-```
-
-#### 수집 주기
-- 월별 통계: 매월 (공개 시)
+| 단계 | 소스 | 비고 |
+|------|------|------|
+| 1차 | Google News RSS 키워드 스코어링 (5개 카테고리) | 공항 코드 자동 탐지 |
+| 2차 | `[]` (데이터 없음) | mock 제거됨 |
 
 ---
 
 ## 해외 데이터 소스
 
-### 1. WHO (세계보건기구)
+| 소스 | URL | 데이터 | 형식 |
+|------|-----|--------|------|
+| WHO Disease Outbreak News | who.int/api/news/diseaseoutbreaknews | 국제 감염병 발생 | JSON (OData) |
+| The Aviation Herald | avherald.com | 국제 항공사건 | HTML 크롤링 |
+| Aviation Weather (METAR) | aviationweather.gov/api/data/metar | 해외 주요공항 기상 | JSON |
 
-#### API 정보
-| 항목 | 내용 |
-|------|------|
-| URL | https://www.who.int |
-| 형식 | API / 크롤링 |
-
-#### 수집 데이터
-```
-- 국가별 감염병 현황
-- 국제 공중보건 비상사태 (PHEIC)
-- 여행 권고사항
-```
+> 과거 문서의 **Aviation Safety Network(ASN)** 는 The Aviation Herald로 교체됨.
+> Global Terrorism Index(GTI)는 현재 미연동.
 
 ---
 
-### 2. Aviation Safety Network (ASN)
+## 수집 주기
 
-#### 정보
-| 항목 | 내용 |
-|------|------|
-| URL | https://aviation-safety.net |
-| 형식 | 웹 크롤링 |
-
-#### 수집 데이터
-```
-- 전세계 항공 사고 DB
-- 사고 유형, 원인, 피해 규모
-- 항공사별 사고 이력
-```
-
----
-
-### 3. Global Terrorism Index (GTI)
-
-#### 정보
-| 항목 | 내용 |
-|------|------|
-| 제공처 | Institute for Economics & Peace |
-| URL | https://www.visionofhumanity.org |
-| 형식 | 연간 보고서 / API |
-
-#### 수집 데이터
-```
-- 국가별 테러 위험 지수 (0-10)
-- 테러 발생 건수
-- 테러 유형 분석
-```
-
----
-
-## 데이터 수집기 구현
-
-### 기본 수집기 클래스
-
-```python
-# backend/app/collectors/base.py
-
-from abc import ABC, abstractmethod
-from datetime import datetime
-from typing import Any, Dict, List, Optional
-import httpx
-from app.core.database import get_db
-from app.models.risk import RawData
-
-class BaseCollector(ABC):
-    """데이터 수집기 기본 클래스"""
-
-    name: str = "base"
-    source_url: str = ""
-    collection_interval: int = 3600  # 초 단위
-
-    def __init__(self):
-        self.client = httpx.AsyncClient(timeout=30.0)
-        self.last_collected: Optional[datetime] = None
-
-    @abstractmethod
-    async def collect(self) -> List[Dict[str, Any]]:
-        """데이터 수집 (구현 필수)"""
-        pass
-
-    @abstractmethod
-    def transform(self, raw_data: Dict) -> Dict[str, Any]:
-        """데이터 변환 (구현 필수)"""
-        pass
-
-    async def save(self, data: List[Dict[str, Any]]):
-        """수집 데이터 저장"""
-        async with get_db() as db:
-            for item in data:
-                raw = RawData(
-                    factor_id=item["factor_id"],
-                    airport_id=item.get("airport_id"),
-                    collected_at=datetime.utcnow(),
-                    value=item["value"],
-                    raw_json=item.get("raw_json"),
-                    source_url=self.source_url
-                )
-                db.add(raw)
-            await db.commit()
-
-    async def run(self):
-        """수집 실행"""
-        try:
-            raw_data = await self.collect()
-            transformed = [self.transform(d) for d in raw_data]
-            await self.save(transformed)
-            self.last_collected = datetime.utcnow()
-            return {"status": "success", "count": len(transformed)}
-        except Exception as e:
-            return {"status": "error", "message": str(e)}
-```
-
-### 기상 수집기 예시
-
-```python
-# backend/app/collectors/weather.py
-
-from typing import Any, Dict, List
-from app.collectors.base import BaseCollector
-from app.config import settings
-
-class WeatherCollector(BaseCollector):
-    """기상청 항공기상 수집기"""
-
-    name = "weather"
-    source_url = "https://data.kma.go.kr"
-    collection_interval = 3600  # 1시간
-
-    # 공항 ICAO 코드 매핑
-    AIRPORT_CODES = {
-        "ICN": "RKSI",  # 인천
-        "GMP": "RKSS",  # 김포
-        "PUS": "RKPK",  # 김해
-        "CJU": "RKPC",  # 제주
-        # ... 추가
-    }
-
-    async def collect(self) -> List[Dict[str, Any]]:
-        """METAR 데이터 수집"""
-        results = []
-
-        for airport_code, icao_code in self.AIRPORT_CODES.items():
-            url = f"{settings.KMA_API_URL}/api/aviation/metar"
-            params = {
-                "serviceKey": settings.KMA_API_KEY,
-                "icao": icao_code,
-                "dataType": "JSON"
-            }
-
-            response = await self.client.get(url, params=params)
-            response.raise_for_status()
-
-            data = response.json()
-            data["airport_code"] = airport_code
-            results.append(data)
-
-        return results
-
-    def transform(self, raw_data: Dict) -> Dict[str, Any]:
-        """METAR 데이터 변환"""
-        metar = raw_data.get("response", {}).get("body", {}).get("items", [{}])[0]
-
-        return {
-            "airport_code": raw_data["airport_code"],
-            "factors": {
-                "visibility": self._parse_visibility(metar.get("visibility")),
-                "wind_speed": metar.get("windSpeed", 0),
-                "wind_gust": metar.get("windGust", 0),
-                "temperature": metar.get("temperature"),
-                "weather_code": metar.get("weather", ""),
-            },
-            "raw_json": metar
-        }
-
-    def _parse_visibility(self, vis: str) -> int:
-        """시정 파싱 (미터 단위)"""
-        if vis == "9999" or vis == "CAVOK":
-            return 10000
-        try:
-            return int(vis)
-        except:
-            return 0
-```
-
----
-
-## 데이터 품질 관리
-
-### 검증 규칙
-
-```python
-# backend/app/collectors/validators.py
-
-from pydantic import BaseModel, validator
-from typing import Optional
-
-class WeatherDataValidator(BaseModel):
-    visibility: int
-    wind_speed: float
-    temperature: Optional[float]
-
-    @validator("visibility")
-    def validate_visibility(cls, v):
-        if v < 0 or v > 50000:
-            raise ValueError(f"Invalid visibility: {v}")
-        return v
-
-    @validator("wind_speed")
-    def validate_wind_speed(cls, v):
-        if v < 0 or v > 100:
-            raise ValueError(f"Invalid wind speed: {v}")
-        return v
-
-class IncidentDataValidator(BaseModel):
-    severity: int
-    fatalities: int
-    injuries: int
-
-    @validator("severity")
-    def validate_severity(cls, v):
-        if v < 1 or v > 5:
-            raise ValueError(f"Invalid severity: {v}")
-        return v
-```
-
-### 결측치 처리
-
-```python
-def handle_missing_data(data: Dict, defaults: Dict) -> Dict:
-    """결측치 기본값 처리"""
-    for key, default_value in defaults.items():
-        if key not in data or data[key] is None:
-            data[key] = default_value
-    return data
-
-# 기상 데이터 기본값
-WEATHER_DEFAULTS = {
-    "visibility": 10000,
-    "wind_speed": 0,
-    "wind_gust": 0,
-    "precipitation": 0,
-}
-```
-
----
-
-## 수집 스케줄
-
-| 수집기 | 주기 | 시간 | 비고 |
-|--------|------|------|------|
-| WeatherCollector | 매 시간 | :00 | 정시 |
-| PassengerCollector | 매일 | 06:00 | |
-| IncidentCollector | 매일 | 07:00 | |
-| HealthCollector | 매일 | 08:00 | |
-| TravelAdvisoryCollector | 6시간 | 00,06,12,18 | |
-| NewsCollector | 30분 | :00, :30 | |
-| InternationalCollector | 매일 | 09:00 | |
+| 수집기 | 주기 |
+|--------|------|
+| WeatherCollector / InternationalWeatherCollector | 1시간 |
+| FlightStatusCollector | 30분 |
+| SecurityThreatCollector / NewsCrawler | 1시간 |
+| HealthRiskCollector / TravelAdvisoryCollector | 6시간 |
+| AviationSafetyCollector / InternationalAviationCollector | 6시간 |
 
 ---
 
 ## API 키 관리
 
-### 환경변수 설정
-
 ```bash
-# .env
-KMA_API_KEY=your_kma_api_key_here
-DATA_GO_KR_API_KEY=your_data_go_kr_key_here
+# .env — 무료 신청 키 (없어도 폴백으로 동작, 데이터 정확도만 하락)
+KMA_API_KEY=...           # 기상청
+DATA_GO_KR_API_KEY=...    # 공공데이터포털
 ```
-
-### API 키 발급 링크
 
 | 서비스 | 발급 URL |
 |--------|----------|
-| 기상청 | https://data.kma.go.kr (회원가입 후 API 활용신청) |
-| 공공데이터포털 | https://data.go.kr (회원가입 후 API 활용신청) |
+| 기상청 단기예보 | https://www.data.go.kr/data/15084084/openapi.do |
+| 한국공항공사 운항정보 | https://www.data.go.kr/data/15000126/openapi.do |
+| 질병관리청 검역관리지역 | https://www.data.go.kr/data/15139251/openapi.do |
+| 외교부 여행경보 | https://www.data.go.kr/data/15095500/openapi.do |
+
+> aviationweather.gov · WHO JSON API · Google News RSS · The Aviation Herald 는 **키 불필요**.
 
 ---
 
 ## 크롤링 주의사항
 
-### robots.txt 준수
-
-```python
-import urllib.robotparser
-
-def check_robots_txt(url: str, user_agent: str = "*") -> bool:
-    """robots.txt 확인"""
-    rp = urllib.robotparser.RobotFileParser()
-    rp.set_url(f"{url}/robots.txt")
-    rp.read()
-    return rp.can_fetch(user_agent, url)
-```
-
-### Rate Limiting
-
-```python
-import asyncio
-from collections import defaultdict
-from datetime import datetime, timedelta
-
-class RateLimiter:
-    def __init__(self, max_requests: int, time_window: int):
-        self.max_requests = max_requests
-        self.time_window = time_window  # 초
-        self.requests = defaultdict(list)
-
-    async def acquire(self, key: str):
-        now = datetime.now()
-        cutoff = now - timedelta(seconds=self.time_window)
-
-        # 오래된 요청 제거
-        self.requests[key] = [t for t in self.requests[key] if t > cutoff]
-
-        if len(self.requests[key]) >= self.max_requests:
-            # 대기 필요
-            sleep_time = (self.requests[key][0] - cutoff).total_seconds()
-            await asyncio.sleep(sleep_time)
-
-        self.requests[key].append(now)
-```
-
----
-
-## 데이터 저장 용량 예측
-
-| 데이터 유형 | 일일 건수 | 건당 크기 | 월간 용량 |
-|-------------|----------|----------|----------|
-| 기상 (METAR) | 360건 (15공항 × 24시간) | 1KB | ~11MB |
-| 승객 통계 | 15건 | 0.5KB | ~0.2MB |
-| 사고 이력 | ~5건 | 5KB | ~0.8MB |
-| 뉴스/이슈 | ~100건 | 2KB | ~6MB |
-| **총합** | | | **~20MB/월** |
-
-연간 예상: ~240MB (원시 데이터)
-10년 보존 시: ~2.4GB
+- XML/RSS 파싱은 `defusedxml`로 처리(외부 엔티티 공격 방어).
+- robots.txt 준수 및 요청 간 rate limiting 권장.
+- 정부 사이트 중 `airportal.go.kr`, `0404.go.kr` 웹페이지는 JavaScript 렌더링 앱이라
+  직접 스크레이핑 불가 → 공개 API(data.go.kr) 또는 Google News RSS 프록시로 대체함.

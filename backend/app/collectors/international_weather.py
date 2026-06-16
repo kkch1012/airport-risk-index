@@ -66,12 +66,12 @@ class InternationalWeatherCollector(BaseCollector):
                 self.logger.info("METAR: %d 건 수집", len(data))
                 return data
 
-            self.logger.warning("METAR 응답 비어있음, 목업 사용")
-            return self._get_mock_data()
+            self.logger.warning("METAR 응답 비어있음 → 데이터 없음")
+            return []
 
         except Exception as e:
-            self.logger.warning("METAR 수집 실패 (%s), 목업 사용", e)
-            return self._get_mock_data()
+            self.logger.warning("METAR 수집 실패 (%s) → 데이터 없음", e)
+            return []
 
     def transform(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
         """METAR JSON → 표준 형식"""
@@ -185,35 +185,6 @@ class InternationalWeatherCollector(BaseCollector):
     def _statute_miles_to_meters(sm: float) -> float:
         """statute miles → meters"""
         return sm * 1609.34
-
-    def _get_mock_data(self) -> List[Dict[str, Any]]:
-        """목업 METAR 데이터"""
-        import random
-        now = datetime.now()
-        random.seed(now.strftime("%Y%m%d%H"))
-
-        mock_data = []
-        for icao, info in INTERNATIONAL_AIRPORTS.items():
-            wind = random.randint(3, 25)
-            gust = wind + random.randint(0, 10) if random.random() > 0.6 else 0
-            vis = random.choice([1, 3, 5, 7, 10, 10, 10])
-            wx_options = ["", "", "", "", "RA", "BR", "FG", "SN", "TS"]
-            wx = random.choice(wx_options)
-
-            mock_data.append({
-                "icaoId": icao,
-                "reportTime": now.strftime("%Y-%m-%dT%H:00:00Z"),
-                "wspd": wind,
-                "wgst": gust if gust > wind else None,
-                "visib": vis,
-                "temp": random.randint(-5, 35),
-                "dewp": random.randint(-10, 25),
-                "altim": round(random.uniform(29.5, 30.5), 2),
-                "wxString": wx,
-                "cover": random.choice(["CLR", "FEW", "SCT", "BKN", "OVC"]),
-            })
-
-        return mock_data
 
     def get_country_weather_risk(
         self, data_list: List[Dict[str, Any]], country_code: str

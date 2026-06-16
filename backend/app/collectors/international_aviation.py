@@ -116,12 +116,12 @@ class InternationalAviationCollector(BaseCollector):
                 self.logger.info("Aviation Herald: %d건 수집", len(items))
                 return items
 
-            self.logger.warning("Aviation Herald 파싱 결과 없음, 목업 사용")
-            return self._get_mock_data()
+            self.logger.warning("Aviation Herald 파싱 결과 없음 → 데이터 없음")
+            return []
 
         except Exception as e:
-            self.logger.warning("Aviation Herald 수집 실패 (%s), 목업 사용", e)
-            return self._get_mock_data()
+            self.logger.warning("Aviation Herald 수집 실패 (%s) → 데이터 없음", e)
+            return []
 
     def _parse_html(self, html: str) -> List[Dict[str, Any]]:
         """HTML에서 사고 목록 파싱"""
@@ -266,34 +266,6 @@ class InternationalAviationCollector(BaseCollector):
         """고유 ID 생성"""
         content = f"{raw_data.get('title', '')}{raw_data.get('link', '')}"
         return hashlib.md5(content.encode()).hexdigest()[:16]
-
-    def _get_mock_data(self) -> List[Dict[str, Any]]:
-        """목업 데이터"""
-        import random
-        now = datetime.now()
-        random.seed(now.strftime("%Y%m%d"))
-
-        countries = ["Japan", "China", "Thailand", "Vietnam", "Philippines", "USA"]
-        types = [
-            "runway excursion", "turbulence injuries", "bird strike",
-            "engine failure", "gear damage", "diversion due to weather",
-        ]
-
-        mock = []
-        for i in range(random.randint(3, 8)):
-            days_ago = random.randint(1, 60)
-            date = (now - timedelta(days=days_ago)).strftime("%Y-%m-%d")
-            country = random.choice(countries)
-            incident_type = random.choice(types)
-
-            mock.append({
-                "title": f"Aircraft {incident_type} in {country}",
-                "link": f"https://avherald.com/h?article={random.randint(100000, 999999)}",
-                "description": f"A commercial aircraft experienced {incident_type} near {country} airport.",
-                "pub_date": date,
-            })
-
-        return mock
 
     def get_country_risk_summary(
         self, data_list: List[Dict[str, Any]]

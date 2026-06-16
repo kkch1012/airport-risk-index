@@ -19,6 +19,7 @@ DISEASE_RISK_SCORES = {
     "PLAGUE": 90,
     "LASSAFEVER": 90,
     "MERS": 85,
+    "NIPAH": 85,
     "YELLOWFEVER": 80,
     "POLIOVIRUS": 80,
     "AVIANFLU": 75,
@@ -51,12 +52,18 @@ AIRPORT_INTERNATIONAL_ROUTES = {
 
 @dataclass
 class CategoryScore:
-    """카테고리별 위험 점수"""
+    """카테고리별 위험 점수
+
+    has_data=False 인 경우 해당 카테고리의 데이터 소스(수집기)에서
+    유효한 데이터를 얻지 못해 점수가 중립(neutral) 기본값임을 의미한다.
+    이 카테고리는 종합 위험지수 계산 시 가중치에서 제외(재정규화)된다.
+    """
     code: str
     name: str
     score: float
     level: str
     factors: Dict[str, float]
+    has_data: bool = True
 
 
 @dataclass
@@ -190,7 +197,8 @@ class RiskCalculator:
             name="기상위험",
             score=round(score, 2),
             level=self._get_risk_level(score),
-            factors=factors
+            factors=factors,
+            has_data=bool(factors),
         )
 
     def calculate_external_score(
@@ -220,14 +228,26 @@ class RiskCalculator:
         # 해당 공항의 국제 노선 취항 국가 조회
         route_countries = AIRPORT_INTERNATIONAL_ROUTES.get(airport_code, [])
 
-        if not route_countries or not travel_advisory_data:
-            # 국제선이 없는 공항이면 외부요인 위험 낮음
+        if not route_countries:
+            # 국제선이 없는 공항이면 외부요인 위험 낮음 (실제 판정 → has_data=True)
             return CategoryScore(
                 code="external",
                 name="외부요인",
                 score=5.0,
                 level="LOW",
-                factors=factors
+                factors=factors,
+                has_data=True,
+            )
+
+        if not travel_advisory_data:
+            # 여행경보 데이터 소스가 비어있음 → 중립 + 데이터 없음
+            return CategoryScore(
+                code="external",
+                name="외부요인",
+                score=5.0,
+                level="LOW",
+                factors=factors,
+                has_data=False,
             )
 
         # 취항 국가별 여행경보 점수 계산
@@ -336,14 +356,26 @@ class RiskCalculator:
         # 해당 공항의 국제 노선 취항 국가
         route_countries = AIRPORT_INTERNATIONAL_ROUTES.get(airport_code, [])
 
-        if not route_countries or not health_data:
-            # 국제선이 없는 공항이면 보건위험 낮음
+        if not route_countries:
+            # 국제선이 없는 공항이면 보건위험 낮음 (실제 판정 → has_data=True)
             return CategoryScore(
                 code="health",
                 name="보건위험",
                 score=5.0,
                 level="LOW",
-                factors=factors
+                factors=factors,
+                has_data=True,
+            )
+
+        if not health_data:
+            # 검역/감염병 데이터 소스가 비어있음 → 중립 + 데이터 없음
+            return CategoryScore(
+                code="health",
+                name="보건위험",
+                score=5.0,
+                level="LOW",
+                factors=factors,
+                has_data=False,
             )
 
         # 국가별 위험도 맵 구축 (여러 질병이 있을 수 있으므로 최대값 사용)
@@ -423,7 +455,11 @@ class RiskCalculator:
         operational_data: List[Dict[str, Any]]
     ) -> CategoryScore:
         """
-        운영위험 점수 계산 (항공편 지연/결항 데이터 기반)
+        운영위험 점수 계산 (항공편 지연 중심)
+
+        크롤링/공개데이터만으로 산출 가능한 지표(지연율·결항율)에 집중한다.
+        혼잡도(시간대별 운항편수)·시설노후도·파업 등 운영자 내부 데이터가
+        필요한 지표는 제외하고, 지연율을 주축(0-65)으로 결항율(0-35)을 보조로 둔다.
 
         Args:
             airport_code: 공항 코드
@@ -433,9 +469,8 @@ class RiskCalculator:
             CategoryScore: 운영위험 점수
         """
         factors = {
-            "delay_rate": 0.0,       # 지연율
-            "cancellation_rate": 0.0, # 결항율
-            "congestion": 0.0,        # 혼잡도
+            "delay_rate": 0.0,        # 지연율 (주축)
+            "cancellation_rate": 0.0,  # 결항율 (보조)
         }
 
         # 해당 공항 데이터 찾기
@@ -446,39 +481,28 @@ class RiskCalculator:
                 break
 
         if not airport_data:
-            # 데이터 없으면 기본 낮은 위험도
+            # 운항 데이터 소스 없음 → 중립 + 데이터 없음
             return CategoryScore(
                 code="operational",
                 name="운영위험",
                 score=10.0,
                 level="LOW",
-                factors=factors
+                factors=factors,
+                has_data=False,
             )
 
-        # 지연율 점수 (0-40점): 지연율 20% 이상이면 최대
+        # 지연율 점수 (0-65점): 지연율 26% 이상이면 최대
         delay_rate = airport_data.get("delay_rate", 0)
-        delay_score = min(40, delay_rate * 2)
+        delay_score = min(65, delay_rate * 2.5)
         factors["delay_rate"] = round(delay_score, 1)
 
-        # 결항율 점수 (0-35점): 결항율 5% 이상이면 최대
+        # 결항율 점수 (0-35점): 결항율 7% 이상이면 최대
         cancel_rate = airport_data.get("cancellation_rate", 0)
-        cancel_score = min(35, cancel_rate * 7)
+        cancel_score = min(35, cancel_rate * 5)
         factors["cancellation_rate"] = round(cancel_score, 1)
 
-        # 혼잡도 점수 (0-25점): 일일 운항편수 기준
-        total_flights = airport_data.get("total_flights", 0)
-        if total_flights >= 200:
-            congestion_score = 25
-        elif total_flights >= 100:
-            congestion_score = 15
-        elif total_flights >= 50:
-            congestion_score = 8
-        else:
-            congestion_score = 3
-        factors["congestion"] = round(congestion_score, 1)
-
-        # 최종 점수
-        final_score = delay_score + cancel_score + congestion_score
+        # 최종 점수 (지연 중심)
+        final_score = delay_score + cancel_score
         final_score = min(100, max(0, final_score))
 
         return CategoryScore(
@@ -486,7 +510,8 @@ class RiskCalculator:
             name="운영위험",
             score=round(final_score, 2),
             level=self._get_risk_level(final_score),
-            factors=factors
+            factors=factors,
+            has_data=True,
         )
 
     def calculate_aviation_score(
@@ -524,12 +549,15 @@ class RiskCalculator:
 
         if not airport_accidents and not all_aircraft_accidents:
             # 사고 데이터 없음 = 낮은 위험
+            # 입력 자체가 비어있으면 데이터 소스 부재(has_data=False),
+            # 데이터는 있으나 항공기 사고가 없으면 실제 낮은 위험(has_data=True)
             return CategoryScore(
                 code="aviation",
                 name="항공안전",
                 score=10.0,
                 level="LOW",
-                factors=factors
+                factors=factors,
+                has_data=bool(aviation_data),
             )
 
         # 1. 해당 공항 사고 이력 점수 (0-40점)
@@ -598,7 +626,8 @@ class RiskCalculator:
                 name="보안위협",
                 score=5.0,
                 level="LOW",
-                factors=factors
+                factors=factors,
+                has_data=False,
             )
 
         # 공항별 + 전체(공항 미지정) 데이터 분리
@@ -657,57 +686,20 @@ class RiskCalculator:
             factors=factors
         )
 
-    def calculate_mock_category_score(
-        self,
-        category_code: str,
-        category_name: str,
-        seed: str = ""
-    ) -> CategoryScore:
+    def _no_data_category(self, code: str, name: str) -> CategoryScore:
         """
-        목업 카테고리 점수 생성 (기상 외 카테고리용)
+        데이터 소스가 비어있을 때의 중립 카테고리 점수.
 
-        Args:
-            category_code: 카테고리 코드
-            category_name: 카테고리 이름
-            seed: 랜덤 시드용 문자열
-
-        Returns:
-            CategoryScore: 목업 점수
+        랜덤 목업을 생성하지 않는다. 점수는 중립 기본값(낮음)이며
+        has_data=False 로 표시되어 종합 위험지수 가중치에서 제외된다.
         """
-        import random
-        random.seed(hash(seed + category_code))
-
-        # 카테고리별 기본 범위 설정
-        ranges = {
-            "aviation": (10, 50),
-            "security": (15, 55),
-            "health": (10, 45),
-            "operational": (20, 60),
-            "external": (10, 40),
-        }
-
-        min_val, max_val = ranges.get(category_code, (10, 50))
-        score = random.uniform(min_val, max_val)
-
-        # 목업 요인 데이터
-        mock_factors = {
-            "aviation": {"incident_history": 0, "near_miss": 0, "bird_strike": 0},
-            "security": {"terror_threat": 0, "smuggling": 0, "illegal_entry": 0},
-            "health": {"disease_alert": 0, "quarantine_cases": 0},
-            "operational": {"congestion": 0, "delay_rate": 0},
-            "external": {"travel_advisory": 0, "geopolitical": 0},
-        }
-
-        factors = mock_factors.get(category_code, {})
-        for key in factors:
-            factors[key] = round(random.uniform(5, 50), 1)
-
         return CategoryScore(
-            code=category_code,
-            name=category_name,
-            score=round(score, 2),
-            level=self._get_risk_level(score),
-            factors=factors
+            code=code,
+            name=name,
+            score=0.0,
+            level="LOW",
+            factors={},
+            has_data=False,
         )
 
     def calculate_total_risk(
@@ -739,73 +731,57 @@ class RiskCalculator:
             RiskResult: 종합 위험지수 결과
         """
         categories = {}
-        seed = airport_code + datetime.now().strftime("%Y%m%d")
 
-        # 1. 기상위험 (실제 데이터 또는 목업)
+        # 1. 기상위험 (실제 데이터 없으면 '데이터 없음')
         if weather_data:
             categories["weather"] = self.calculate_weather_score(weather_data)
         else:
-            categories["weather"] = self.calculate_mock_category_score(
-                "weather", "기상위험", seed
-            )
+            categories["weather"] = self._no_data_category("weather", "기상위험")
 
-        # 2. 외부요인 (여행경보 + 해외 데이터 또는 목업)
-        if travel_advisory_data:
-            categories["external"] = self.calculate_external_score(
-                airport_code, travel_advisory_data,
-                international_weather_data=international_weather_data,
-                international_aviation_data=international_aviation_data,
-            )
+        # 2. 외부요인 (여행경보 + 해외 데이터)
+        #    국제선 없는 공항은 데이터 없이도 실제 LOW 판정이 가능하므로 항상 호출
+        categories["external"] = self.calculate_external_score(
+            airport_code, travel_advisory_data or [],
+            international_weather_data=international_weather_data,
+            international_aviation_data=international_aviation_data,
+        )
+
+        # 3. 보건위험 (검역관리지역/감염병 데이터)
+        categories["health"] = self.calculate_health_score(
+            airport_code, health_data or []
+        )
+
+        # 4. 운영위험 (항공편 지연/결항 데이터)
+        categories["operational"] = self.calculate_operational_score(
+            airport_code, operational_data or []
+        )
+
+        # 5. 항공안전 (ARAIB 사고 데이터)
+        categories["aviation"] = self.calculate_aviation_score(
+            airport_code, aviation_data or []
+        )
+
+        # 6. 보안위협
+        categories["security"] = self.calculate_security_score(
+            airport_code, security_data or []
+        )
+
+        # 종합 점수 계산 (실데이터 카테고리만 가중치 재정규화)
+        #   has_data=False 카테고리는 가짜 점수가 아니므로 제외하고,
+        #   남은 카테고리 가중치를 합이 1이 되도록 재정규화한다.
+        available = {
+            code: cat for code, cat in categories.items() if cat.has_data
+        }
+        weight_sum = sum(self.active_weights.get(code, 0.1) for code in available)
+        if weight_sum > 0:
+            total_score = sum(
+                cat.score * self.active_weights.get(code, 0.1)
+                for code, cat in available.items()
+            ) / weight_sum
         else:
-            categories["external"] = self.calculate_mock_category_score(
-                "external", "외부요인", seed
-            )
-
-        # 3. 보건위험 (검역관리지역 데이터 또는 목업)
-        if health_data:
-            categories["health"] = self.calculate_health_score(
-                airport_code, health_data
-            )
-        else:
-            categories["health"] = self.calculate_mock_category_score(
-                "health", "보건위험", seed
-            )
-
-        # 4. 운영위험 (항공편 지연/결항 데이터 또는 목업)
-        if operational_data:
-            categories["operational"] = self.calculate_operational_score(
-                airport_code, operational_data
-            )
-        else:
-            categories["operational"] = self.calculate_mock_category_score(
-                "operational", "운영위험", seed
-            )
-
-        # 5. 항공안전 (ARAIB 사고 데이터 또는 목업)
-        if aviation_data:
-            categories["aviation"] = self.calculate_aviation_score(
-                airport_code, aviation_data
-            )
-        else:
-            categories["aviation"] = self.calculate_mock_category_score(
-                "aviation", "항공안전", seed
-            )
-
-        # 6. 보안위협 (실제 데이터 또는 목업)
-        if security_data:
-            categories["security"] = self.calculate_security_score(
-                airport_code, security_data
-            )
-        else:
-            categories["security"] = self.calculate_mock_category_score(
-                "security", "보안위협", seed
-            )
-
-        # 3. 종합 점수 계산 (가중 평균)
-        total_score = 0
-        for code, cat_score in categories.items():
-            weight = self.active_weights.get(code, 0.1)
-            total_score += cat_score.score * weight
+            # 가용 데이터가 전혀 없으면 위험지수 산출 불가 → 0
+            total_score = 0.0
+        total_score = round(min(100, max(0, total_score)), 2)
 
         return RiskResult(
             airport_code=airport_code,
