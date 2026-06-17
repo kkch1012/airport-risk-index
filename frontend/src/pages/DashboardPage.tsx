@@ -24,6 +24,16 @@ export default function DashboardPage() {
     refetchInterval: wsStatus === 'connected' ? false : 60000,
   });
 
+  // 훅은 항상 early return보다 위에서 호출해야 한다(React Hooks 규칙).
+  // data가 아직 없을 수 있으므로 null-safe 처리.
+  const riskDistribution = useMemo(
+    () => (['LOW', 'MODERATE', 'HIGH', 'CRITICAL'] as RiskLevel[]).map((level) => ({
+      level,
+      count: data?.airports.filter((a) => a.level === level).length ?? 0,
+    })),
+    [data?.airports],
+  );
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -50,14 +60,6 @@ export default function DashboardPage() {
       </div>
     );
   }
-
-  const riskDistribution = useMemo(
-    () => (['LOW', 'MODERATE', 'HIGH', 'CRITICAL'] as RiskLevel[]).map((level) => ({
-      level,
-      count: data.airports.filter((a) => a.level === level).length,
-    })),
-    [data.airports],
-  );
 
   const locale = i18n.language === 'ko' ? 'ko-KR' : 'en-US';
 
