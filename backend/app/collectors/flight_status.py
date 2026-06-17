@@ -466,12 +466,14 @@ class FlightStatusCollector(BaseCollector):
                 self.logger.warning("뉴스 신호 수집 실패 (%s): %s", airport_code, e)
                 continue
 
-            # 신호가 전혀 없으면 제외 (no-data) — 0으로 채워 위험을 왜곡하지 않음
-            if delay_hits == 0 and cancel_hits == 0:
-                continue
+            # 보수적 버킷: 단발 노이즈(1건)로는 안 잡히고 최소 2건부터 인정.
+            # 추정 지연율도 낮춰 추정치가 과대 위험으로 튀지 않게 한다.
+            delay_rate = self._signal_to_rate(delay_hits, buckets=((8, 16.0), (4, 10.0), (2, 5.0)))
+            cancel_rate = self._signal_to_rate(cancel_hits, buckets=((4, 4.0), (2, 2.0)))
 
-            delay_rate = self._signal_to_rate(delay_hits, buckets=((6, 25.0), (3, 16.0), (1, 8.0)))
-            cancel_rate = self._signal_to_rate(cancel_hits, buckets=((3, 5.0), (1, 2.0)))
+            # 버킷 통과 신호가 약하면(노이즈) 제외 = 데이터 없음 (위험 왜곡 방지)
+            if delay_rate == 0 and cancel_rate == 0:
+                continue
 
             results.append({
                 "airport_code": airport_code,
@@ -495,9 +497,27 @@ class FlightStatusCollector(BaseCollector):
         self.logger.info("뉴스 기반 지연 신호 폴백: %d개 공항", len(results))
         return results
 
+    # 항공편 맥락 키워드 — 이게 제목에 있어야 '지연/취소'를 운항 차질로 인정
+    _FLIGHT_CONTEXT = (
+        "항공편", "운항", "항공기", "여객기", "비행기", "이착륙", "착륙", "이륙", "회항",
+    )
+    # 공항 프로젝트/행정 뉴스 — 운항과 무관하므로 제외
+    # (예: "통합신공항 이전 지연", "신공항 건설 지연", "개항 지연")
+    _NON_FLIGHT_CONTEXT = (
+        "이전", "신공항", "통합신공항", "건설", "착공", "개항", "부지", "유치",
+        "후보지", "예산", "기공", "이전사업",
+    )
+
     async def _news_disruption_signal(self, airport_name: str) -> tuple:
-        """공항명으로 최근 7일 운항장애 뉴스 신호량 집계 (지연건수, 결항건수)"""
-        query = f"{airport_name} (지연 OR 결항 OR 결항) when:7d"
+        """공항명으로 최근 7일 운항장애 뉴스 신호량 집계 (지연건수, 결항건수)
+
+        오탐 방지:
+        - 제목에 공항명이 있어야 함
+        - 공항 이전/건설 등 '비운항' 프로젝트 뉴스는 제외
+        - '지연'·'취소'는 항공편 맥락 키워드가 함께 있을 때만 인정
+          ('결항'은 그 자체로 항공 용어라 맥락 불요)
+        """
+        query = f"{airport_name} (지연 OR 결항 OR 취소) when:7d"
         url = f"{self.NEWS_RSS}?q={quote(query)}&hl=ko&gl=KR&ceid=KR:ko"
 
         response = await self.client.get(url, timeout=20.0)
@@ -510,9 +530,12 @@ class FlightStatusCollector(BaseCollector):
             title = (item.findtext("title") or "")
             if airport_name not in title:
                 continue  # 제목에 공항명이 없으면 관련도 낮음 → 제외
-            if "지연" in title:
+            if any(k in title for k in self._NON_FLIGHT_CONTEXT):
+                continue  # 공항 이전/건설 등 운항 무관 뉴스 → 제외
+            has_flight_ctx = any(k in title for k in self._FLIGHT_CONTEXT)
+            if "지연" in title and has_flight_ctx:
                 delay_hits += 1
-            if "결항" in title or "취소" in title:
+            if "결항" in title or ("취소" in title and has_flight_ctx):
                 cancel_hits += 1
         return delay_hits, cancel_hits
 

@@ -515,6 +515,13 @@ class RiskCalculator:
         final_score = delay_score + cancel_score
         final_score = min(100, max(0, final_score))
 
+        # 추정치(뉴스 프록시)는 실측이 아니므로 보수적 상한을 둔다.
+        # 뉴스 신호만으로 HIGH(50+) 이상 위험을 단정하지 않도록 MODERATE 상단(40)으로 제한.
+        is_proxy = bool(airport_data.get("is_proxy"))
+        PROXY_OPERATIONAL_CAP = 40.0
+        if is_proxy:
+            final_score = min(final_score, PROXY_OPERATIONAL_CAP)
+
         return CategoryScore(
             code="operational",
             name="운영위험",
@@ -522,8 +529,7 @@ class RiskCalculator:
             level=self._get_risk_level(final_score),
             factors=factors,
             has_data=True,
-            # 뉴스 신호 기반 폴백(실측 운항통계 아님)이면 추정치로 표시
-            is_proxy=bool(airport_data.get("is_proxy")),
+            is_proxy=is_proxy,
         )
 
     def calculate_aviation_score(

@@ -159,6 +159,28 @@ class TestOperationalScore:
         result = calculator.calculate_operational_score("ICN", ops_data)
         assert result.is_proxy is False
 
+    def test_proxy_score_capped(self, calculator):
+        """추정치는 보수적 상한(40, MODERATE)으로 제한 — HIGH로 안 튐"""
+        # 실측이면 62.5 나올 입력이지만 is_proxy면 40으로 캡
+        proxy = [{
+            "airport_code": "TAE", "delay_rate": 25.0,
+            "cancellation_rate": 0.0, "is_proxy": True,
+        }]
+        result = calculator.calculate_operational_score("TAE", proxy)
+        assert result.is_proxy is True
+        assert result.score == 40.0
+        assert result.level in ("LOW", "MODERATE")  # HIGH 아님
+
+    def test_real_data_not_capped(self, calculator):
+        """실측 데이터는 상한 적용 안 됨 (높으면 높게)"""
+        real = [{
+            "airport_code": "ICN", "delay_rate": 25.0,
+            "cancellation_rate": 6.0, "total_flights": 200,
+        }]
+        result = calculator.calculate_operational_score("ICN", real)
+        assert result.is_proxy is False
+        assert result.score > 40  # 캡 없음
+
 
 class TestExternalScore:
     """외부요인 점수 계산 테스트"""
