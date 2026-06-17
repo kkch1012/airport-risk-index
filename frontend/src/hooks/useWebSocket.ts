@@ -36,9 +36,25 @@ export function useWebSocket({
   onMessageRef.current = onMessage;
 
   const getWsUrl = useCallback(() => {
+    // 우선순위: 명시적 VITE_WS_URL > VITE_API_URL에서 호스트 도출 > 현재 페이지 호스트
+    const explicit = import.meta.env.VITE_WS_URL;
+    if (explicit) return `${explicit}${url}`;
+
+    // 프론트(Vercel)와 백엔드(Render)가 다른 호스트일 때, API 주소에서 WS 호스트를 도출.
+    // VITE_API_URL 예: "https://xxx.onrender.com/api/v1" → "wss://xxx.onrender.com"
+    const apiUrl = import.meta.env.VITE_API_URL;
+    if (apiUrl && /^https?:\/\//.test(apiUrl)) {
+      try {
+        const u = new URL(apiUrl);
+        const wsProto = u.protocol === 'https:' ? 'wss:' : 'ws:';
+        return `${wsProto}//${u.host}${url}`;
+      } catch {
+        // URL 파싱 실패 시 아래 폴백
+      }
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = import.meta.env.VITE_WS_URL || `${protocol}//${window.location.host}`;
-    return `${host}${url}`;
+    return `${protocol}//${window.location.host}${url}`;
   }, [url]);
 
   const connectRef = useRef<() => void>();

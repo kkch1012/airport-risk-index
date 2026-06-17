@@ -72,7 +72,7 @@ export default function CorrelationHeatmap() {
                 <td className="p-2 text-xs text-slate-500 font-medium">
                   {getCategoryLabel(rowCat)}
                 </td>
-                {data.matrix[i].map((value, j) => (
+                {(data.matrix[i] ?? []).map((value, j) => (
                   <td key={j} className="p-1">
                     <div
                       className={`w-full py-2 text-center text-xs rounded ${getColor(value)}`}
