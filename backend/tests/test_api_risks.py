@@ -108,6 +108,11 @@ class TestAirportDetailAPI:
             assert "score" in categories[cat]
             assert "level" in categories[cat]
             assert 0 <= categories[cat]["score"] <= 100
+            # 데이터 신뢰도 플래그 노출 확인
+            assert "has_data" in categories[cat]
+            assert "is_proxy" in categories[cat]
+            assert isinstance(categories[cat]["has_data"], bool)
+            assert isinstance(categories[cat]["is_proxy"], bool)
 
     def test_airport_detail_invalid_code(self, client):
         """존재하지 않는 공항 코드"""

@@ -57,6 +57,10 @@ class CategoryScore:
     has_data=False 인 경우 해당 카테고리의 데이터 소스(수집기)에서
     유효한 데이터를 얻지 못해 점수가 중립(neutral) 기본값임을 의미한다.
     이 카테고리는 종합 위험지수 계산 시 가중치에서 제외(재정규화)된다.
+
+    is_proxy=True 인 경우 점수가 실측 통계가 아니라 뉴스 신호량 기반
+    추정 프록시(예: 운항 지연율, 여행경보 단계)로 산출되었음을 의미한다.
+    (프론트/리포트에서 "추정치"로 구분 표기)
     """
     code: str
     name: str
@@ -64,6 +68,7 @@ class CategoryScore:
     level: str
     factors: Dict[str, float]
     has_data: bool = True
+    is_proxy: bool = False
 
 
 @dataclass
@@ -253,6 +258,7 @@ class RiskCalculator:
         # 취항 국가별 여행경보 점수 계산
         country_scores = []
         high_risk_countries = []
+        used_proxy = False  # 매칭된 여행경보가 뉴스 프록시였는지
 
         # 여행경보 데이터를 국가 코드로 인덱싱
         advisory_map = {d["country_code"]: d for d in travel_advisory_data}
@@ -262,6 +268,8 @@ class RiskCalculator:
             if advisory:
                 score = advisory.get("risk_score", 0)
                 country_scores.append(score)
+                if advisory.get("is_proxy"):
+                    used_proxy = True
 
                 if score >= 40:  # 여행자제 이상
                     high_risk_countries.append({
@@ -329,7 +337,9 @@ class RiskCalculator:
             name="외부요인",
             score=round(final_score, 2),
             level=self._get_risk_level(final_score),
-            factors=factors
+            factors=factors,
+            # 여행경보가 뉴스 프록시 기반이면 추정치로 표시
+            is_proxy=used_proxy,
         )
 
     def calculate_health_score(
@@ -512,6 +522,8 @@ class RiskCalculator:
             level=self._get_risk_level(final_score),
             factors=factors,
             has_data=True,
+            # 뉴스 신호 기반 폴백(실측 운항통계 아님)이면 추정치로 표시
+            is_proxy=bool(airport_data.get("is_proxy")),
         )
 
     def calculate_aviation_score(
@@ -718,14 +730,17 @@ class RiskCalculator:
         """
         종합 위험지수 계산
 
+        데이터가 없는 카테고리는 has_data=False로 표시되어 종합점수 가중치에서
+        제외(재정규화)된다. 랜덤 목업은 생성하지 않는다.
+
         Args:
             airport_code: 공항 코드
             airport_name: 공항 이름
-            weather_data: 기상 데이터 (없으면 목업 사용)
-            travel_advisory_data: 여행경보 데이터 (없으면 목업 사용)
-            health_data: 보건위험 데이터 (없으면 목업 사용)
-            operational_data: 운영위험 데이터 (없으면 목업 사용)
-            aviation_data: 항공안전 데이터 (없으면 목업 사용)
+            weather_data: 기상 데이터 (없으면 has_data=False)
+            travel_advisory_data: 여행경보 데이터 (없으면 has_data=False)
+            health_data: 보건위험 데이터 (없으면 has_data=False)
+            operational_data: 운영위험 데이터 (없으면 has_data=False)
+            aviation_data: 항공안전 데이터 (없으면 has_data=False)
 
         Returns:
             RiskResult: 종합 위험지수 결과

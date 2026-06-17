@@ -93,7 +93,12 @@
     "dataSourceOthers": "기타: {{value}}",
     "riskLevel": "위험도",
     "subFactors": "세부 요인",
-    "categoryChart": "카테고리별 위험지수"
+    "categoryChart": "카테고리별 위험지수",
+    "dataConfidence": "데이터 신뢰도",
+    "estimate": "추정치",
+    "estimateHint": "뉴스 신호 기반 추정 (실측 아님)",
+    "noData": "데이터 없음",
+    "noDataHint": "유효 데이터가 없어 종합점수에서 제외됨"
   },
   "alert": {
     "title": "실시간 알림",

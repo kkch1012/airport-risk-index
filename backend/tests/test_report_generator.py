@@ -80,6 +80,36 @@ class TestCSVReport:
         lines = text.strip().split("\n")
         assert len(lines) >= 2  # 헤더 + 데이터
 
+    @pytest.mark.asyncio
+    async def test_csv_confidence_note(self, db_session):
+        """추정치(is_proxy)·데이터없음(has_data=False)이 신뢰도비고에 표기"""
+        assessment = RiskAssessment(
+            airport_code="GMP",
+            airport_name="김포국제공항",
+            assessed_date=date(2026, 2, 2),
+            total_score=20.0,
+            risk_level="LOW",
+        )
+        db_session.add(assessment)
+        await db_session.flush()
+        db_session.add(CategoryScoreRecord(
+            assessment_id=assessment.id, category_code="operational",
+            category_name="운영위험", score=18.0, level="LOW", factors={},
+            has_data=True, is_proxy=True,
+        ))
+        db_session.add(CategoryScoreRecord(
+            assessment_id=assessment.id, category_code="security",
+            category_name="보안위협", score=0.0, level="LOW", factors={},
+            has_data=False, is_proxy=False,
+        ))
+        await db_session.commit()
+
+        gen = ReportGenerator(db_session)
+        text = (await gen.generate_csv(airport_code="GMP")).decode("utf-8-sig")
+        assert "신뢰도비고" in text
+        assert "추정" in text
+        assert "데이터없음" in text
+
 
 # ─── Excel 테스트 ──────────────────────────────
 

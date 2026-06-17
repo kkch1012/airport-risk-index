@@ -81,6 +81,17 @@ operational_score = delay_score + cancel_score
 뉴스 기반 폴백(운항 지연·여행경보)은 실측이 아닌 추정 프록시로 `is_proxy: True`가 붙습니다.
 소스별 상세는 [DATA_SOURCES.md](DATA_SOURCES.md) 참조.
 
+### G. 신뢰도 노출 (API / 프론트 / 리포트)
+
+`has_data`·`is_proxy`는 다음 경로로 사용자에게 정직하게 노출됩니다.
+
+- **API**: `GET /risks/airports/{code}` 의 각 카테고리에 `has_data`, `is_proxy` 포함.
+  `data_source`는 카테고리별 라벨("실데이터"/"추정치"/"데이터 없음")로 제공. (랜덤 목업 라벨 제거됨)
+- **프론트(상세 페이지)**: 카테고리 카드에 "추정치"(amber)·"데이터 없음"(gray) 배지 표기,
+  데이터 없음 카드는 점수 "—"로 흐리게 표시.
+- **리포트(CSV/Excel/PDF)**: "신뢰도비고" 열에 `추정: <카테고리…> / 데이터없음: <카테고리…>` 형식으로 기록.
+  (DB `category_score_records.has_data/is_proxy` 컬럼에 영속화 — alembic `b2c3d4e5f6a7`)
+
 ---
 
 > 이하 섹션은 **향후 설계 참고용**입니다. (현재 코드와 다를 수 있음 — 특히 혼잡도/시정/ML 가중치 부분)

@@ -66,8 +66,15 @@ class ReportGenerator:
 
         # assessment_id별로 그룹핑
         cats_by_assessment: Dict[int, Dict[str, float]] = {}
+        proxy_by_assessment: Dict[int, List[str]] = {}
+        nodata_by_assessment: Dict[int, List[str]] = {}
         for c in all_cats:
             cats_by_assessment.setdefault(c.assessment_id, {})[c.category_code] = c.score
+            # 구 레코드(컬럼 추가 전)는 getattr 기본값으로 안전 처리
+            if getattr(c, "is_proxy", False):
+                proxy_by_assessment.setdefault(c.assessment_id, []).append(c.category_code)
+            if getattr(c, "has_data", True) is False:
+                nodata_by_assessment.setdefault(c.assessment_id, []).append(c.category_code)
 
         rows = []
         for a in assessments:
@@ -78,10 +85,31 @@ class ReportGenerator:
                 "date": str(a.assessed_date),
                 "total_score": a.total_score,
                 "risk_level": a.risk_level,
+                "confidence_note": self._confidence_note(
+                    proxy_by_assessment.get(a.id, []),
+                    nodata_by_assessment.get(a.id, []),
+                ),
                 **{f"cat_{k}": v for k, v in cats.items()},
             })
 
         return rows
+
+    @staticmethod
+    def _confidence_note(proxy_codes: List[str], nodata_codes: List[str]) -> str:
+        """카테고리별 신뢰도 비고 문자열 생성.
+
+        추정치(뉴스 프록시)·데이터없음 카테고리를 사람이 읽을 수 있게 표기한다.
+        """
+        parts = []
+        if proxy_codes:
+            parts.append(
+                "추정: " + ", ".join(CATEGORY_LABELS.get(c, c) for c in proxy_codes)
+            )
+        if nodata_codes:
+            parts.append(
+                "데이터없음: " + ", ".join(CATEGORY_LABELS.get(c, c) for c in nodata_codes)
+            )
+        return " / ".join(parts)
 
     # ── CSV ────────────────────────────────────
 
@@ -104,6 +132,7 @@ class ReportGenerator:
             "date": "평가일",
             "total_score": "종합점수",
             "risk_level": "위험등급",
+            "confidence_note": "신뢰도비고",
         }
         for code, label in CATEGORY_LABELS.items():
             rename_map[f"cat_{code}"] = label
@@ -135,6 +164,7 @@ class ReportGenerator:
             "date": "평가일",
             "total_score": "종합점수",
             "risk_level": "위험등급",
+            "confidence_note": "신뢰도비고",
         }
         for code, label in CATEGORY_LABELS.items():
             rename_map[f"cat_{code}"] = label
@@ -204,6 +234,10 @@ class ReportGenerator:
             "CustomNormal", parent=styles["Normal"],
             fontName=font_name, fontSize=10,
         )
+        cell_style = ParagraphStyle(
+            "CustomCell", parent=styles["Normal"],
+            fontName=font_name, fontSize=8,
+        )
 
         elements = []
 
@@ -222,18 +256,20 @@ class ReportGenerator:
             elements.append(Paragraph("No data available", normal_style))
         else:
             # 테이블 데이터
-            headers = ["Airport", "Date", "Score", "Level"]
+            headers = ["Airport", "Date", "Score", "Level", "비고(신뢰도)"]
             table_data = [headers]
             for r in rows[:50]:  # 최대 50행
                 level = LEVEL_LABELS.get(r["risk_level"], r["risk_level"])
+                note = r.get("confidence_note", "") or "-"
                 table_data.append([
                     f'{r["airport_code"]}',
                     r["date"],
                     f'{r["total_score"]:.1f}',
                     level,
+                    Paragraph(note, cell_style),  # 줄바꿈 위해 Paragraph 사용
                 ])
 
-            table = Table(table_data, colWidths=[80, 80, 60, 60])
+            table = Table(table_data, colWidths=[60, 70, 45, 50, 180])
 
             # 위험등급별 색상
             style_commands = [

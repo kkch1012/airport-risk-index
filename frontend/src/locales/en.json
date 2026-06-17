@@ -93,7 +93,12 @@
     "dataSourceOthers": "Others: {{value}}",
     "riskLevel": "Risk Level",
     "subFactors": "Sub-factors",
-    "categoryChart": "Risk Index by Category"
+    "categoryChart": "Risk Index by Category",
+    "dataConfidence": "Data Confidence",
+    "estimate": "Estimate",
+    "estimateHint": "News-signal based estimate (not measured)",
+    "noData": "No Data",
+    "noDataHint": "No valid data; excluded from total score"
   },
   "alert": {
     "title": "Real-time Alerts",

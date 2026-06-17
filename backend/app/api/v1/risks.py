@@ -51,6 +51,20 @@ async def _get_calculator() -> RiskCalculator:
         return RiskCalculator()
 
 
+def _source_label(cat_score) -> str:
+    """카테고리 점수의 데이터 신뢰도 라벨.
+
+    - 데이터 없음: 유효 데이터 소스 부재(가중치에서 제외됨)
+    - 추정치: 뉴스 신호 기반 프록시(실측 통계 아님)
+    - 실데이터: 공개 API/관측/크롤링 실데이터
+    """
+    if not cat_score.has_data:
+        return "데이터 없음"
+    if cat_score.is_proxy:
+        return "추정치"
+    return "실데이터"
+
+
 async def get_weather_data_map() -> dict:
     """기상 데이터를 공항 코드별로 매핑하여 반환"""
     async with WeatherCollector() as collector:
@@ -300,12 +314,13 @@ async def get_dashboard():
         },
         "airports": airport_data,
         "alerts": alerts[:5],  # 최대 5개
+        # 키가 없으면 크롤링/뉴스 폴백으로 동작(랜덤 목업은 제거됨)
         "data_sources": {
-            "weather": "실제 데이터" if weather_map else "목업 데이터",
-            "travel_advisory": "실제 데이터" if is_advisory_real else "목업 데이터",
-            "health": "실제 데이터" if is_health_real else "목업 데이터",
-            "operational": "실제 데이터" if is_operational_real else "목업 데이터",
-            "aviation": "실제 데이터" if is_aviation_real else "목업 데이터",
+            "weather": "공개 API" if weather_map else "데이터 없음",
+            "travel_advisory": "공개 API" if is_advisory_real else "크롤링 폴백",
+            "health": "공개 API" if is_health_real else "크롤링 폴백",
+            "operational": "공개 API" if is_operational_real else "크롤링 폴백",
+            "aviation": "공개 API" if is_aviation_real else "크롤링 폴백",
         }
     }
 
@@ -359,6 +374,7 @@ async def get_airport_risk(
             "level": cat_score.level,
             "factors": cat_score.factors,
             "has_data": cat_score.has_data,
+            "is_proxy": cat_score.is_proxy,
         }
 
     return {
@@ -371,14 +387,12 @@ async def get_airport_risk(
         "risk_level": risk_result.risk_level,
         "categories": categories,
         "updated_at": risk_result.updated_at,
+        # 카테고리별 데이터 신뢰도(실데이터/추정치/데이터없음)를 정직하게 노출.
+        # 랜덤 목업은 제거됨 — 더 이상 "목업 데이터"는 존재하지 않는다.
         "data_source": {
-            "weather": "실제 데이터" if weather_data else "목업 데이터",
-            "travel_advisory": "실제 데이터" if is_advisory_real else "목업 데이터",
-            "health": "실제 데이터" if is_health_real else "목업 데이터",
-            "operational": "실제 데이터" if is_operational_real else "목업 데이터",
-            "aviation": "실제 데이터" if is_aviation_real else "목업 데이터",
-            "security": "목업 데이터 (추후 연동 예정)",
-        }
+            code: _source_label(cat_score)
+            for code, cat_score in risk_result.categories.items()
+        },
     }
 
 
@@ -494,7 +508,7 @@ async def get_travel_advisory():
 
     return {
         "updated_at": datetime.now().isoformat(),
-        "data_source": "실제 데이터" if collector.api_key else "목업 데이터",
+        "data_source": "공개 API" if collector.api_key else "크롤링 폴백",
         "summary": summary,
         "countries": result["data"],
     }
@@ -514,7 +528,7 @@ async def get_health_risk():
 
     return {
         "updated_at": datetime.now().isoformat(),
-        "data_source": "실제 데이터" if collector.api_key else "목업 데이터",
+        "data_source": "공개 API" if collector.api_key else "크롤링 폴백",
         "summary": summary,
         "quarantine_regions": result["data"],
     }
@@ -546,7 +560,7 @@ async def get_airport_health_risk(airport_code: str):
 
     return {
         "updated_at": datetime.now().isoformat(),
-        "data_source": "실제 데이터" if collector.api_key else "목업 데이터",
+        "data_source": "공개 API" if collector.api_key else "크롤링 폴백",
         "airport": {
             "code": airport_code,
             "name": AIRPORT_NAMES[airport_code],
@@ -569,7 +583,7 @@ async def get_flight_status():
 
     return {
         "updated_at": datetime.now().isoformat(),
-        "data_source": "실제 데이터" if collector.api_key else "목업 데이터",
+        "data_source": "공개 API" if collector.api_key else "크롤링 폴백",
         "summary": summary,
         "airports": result["data"],
     }
@@ -605,7 +619,7 @@ async def get_airport_flight_status(airport_code: str):
 
     return {
         "updated_at": datetime.now().isoformat(),
-        "data_source": "실제 데이터" if collector.api_key else "목업 데이터",
+        "data_source": "공개 API" if collector.api_key else "크롤링 폴백",
         "airport": {
             "code": airport_code,
             "name": AIRPORT_NAMES[airport_code],

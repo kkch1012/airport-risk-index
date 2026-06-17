@@ -241,9 +241,9 @@ class FlightStatusCollector(BaseCollector):
         Returns:
             변환된 운영위험 데이터
         """
-        # 이미 변환된 데이터인 경우 (목업 데이터 등)
+        # 이미 집계된 형태인 경우 (뉴스 프록시 폴백 등 — total_flights 포함)
         if raw_data.get("total_flights") is not None and raw_data.get("operational_score") is None:
-            # 목업 데이터에서 operational_score 계산
+            # 집계 데이터에서 operational_score 계산
             delay_rate = raw_data.get("delay_rate", 0)
             cancellation_rate = raw_data.get("cancellation_rate", 0)
             avg_delay = raw_data.get("average_delay_minutes", 0)

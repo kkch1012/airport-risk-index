@@ -132,6 +132,32 @@ class TestOperationalScore:
         """공항 데이터 없을 때 기본값"""
         result = calculator.calculate_operational_score("XXX", [])
         assert result.score == 10.0  # 기본 낮은 위험도
+        assert result.has_data is False  # 데이터 없음 → 가중치 제외
+        assert result.is_proxy is False
+
+    def test_proxy_flag_propagates(self, calculator):
+        """뉴스 프록시 운항 데이터는 is_proxy=True로 표시"""
+        ops_data = [{
+            "airport_code": "ICN",
+            "delay_rate": 8.0,
+            "cancellation_rate": 2.0,
+            "total_flights": 0,
+            "is_proxy": True,
+        }]
+        result = calculator.calculate_operational_score("ICN", ops_data)
+        assert result.is_proxy is True
+        assert result.has_data is True
+
+    def test_real_data_not_proxy(self, calculator):
+        """실측 운항 데이터는 is_proxy=False"""
+        ops_data = [{
+            "airport_code": "ICN",
+            "delay_rate": 8.0,
+            "cancellation_rate": 2.0,
+            "total_flights": 100,
+        }]
+        result = calculator.calculate_operational_score("ICN", ops_data)
+        assert result.is_proxy is False
 
 
 class TestExternalScore:
@@ -163,6 +189,31 @@ class TestExternalScore:
         """국내선 전용 공항은 낮은 점수"""
         result = calculator.calculate_external_score("KWJ", [])  # 광주 - 국제선 없음
         assert result.score == 5.0
+
+    def test_external_proxy_flag(self, calculator):
+        """매칭된 여행경보가 뉴스 프록시면 is_proxy=True"""
+        advisory_data = [
+            {"country_code": "JP", "risk_score": 40, "country_name": "일본", "is_proxy": True},
+        ]
+        result = calculator.calculate_external_score("GMP", advisory_data)
+        assert result.is_proxy is True
+
+    def test_external_real_not_proxy(self, calculator):
+        """실측 여행경보는 is_proxy=False"""
+        advisory_data = [
+            {"country_code": "JP", "risk_score": 40, "country_name": "일본"},
+        ]
+        result = calculator.calculate_external_score("GMP", advisory_data)
+        assert result.is_proxy is False
+
+    def test_domestic_airport_not_proxy(self, calculator):
+        """국제선 없는 공항은 프록시 경보가 있어도 is_proxy=False (취항국 없음)"""
+        advisory_data = [
+            {"country_code": "JP", "risk_score": 40, "country_name": "일본", "is_proxy": True},
+        ]
+        result = calculator.calculate_external_score("KWJ", advisory_data)
+        assert result.is_proxy is False
+        assert result.has_data is True
 
 
 class TestHealthScore:

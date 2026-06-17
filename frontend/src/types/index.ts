@@ -19,6 +19,8 @@ export interface CategoryScore {
   score: number;
   level: RiskLevel;
   factors: Record<string, number>;
+  has_data?: boolean;  // false = 유효 데이터 없음(가중치 제외)
+  is_proxy?: boolean;  // true = 뉴스 신호 기반 추정치(실측 아님)
 }
 
 // 공항 위험지수 요약

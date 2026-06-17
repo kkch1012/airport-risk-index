@@ -5,6 +5,7 @@
 from datetime import date, datetime, timezone
 
 from sqlalchemy import (
+    Boolean,
     Column,
     Integer,
     String,
@@ -67,6 +68,9 @@ class CategoryScoreRecord(Base):
     score = Column(Float, nullable=False)
     level = Column(String(20), nullable=False)
     factors = Column(JSON, nullable=True)
+    # 데이터 신뢰도: has_data=False(데이터없음, 가중치 제외), is_proxy=True(뉴스 추정치)
+    has_data = Column(Boolean, nullable=False, default=True, server_default="1")
+    is_proxy = Column(Boolean, nullable=False, default=False, server_default="0")
 
     assessment = relationship("RiskAssessment", back_populates="category_scores")
 

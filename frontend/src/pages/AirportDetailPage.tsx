@@ -121,24 +121,20 @@ export default function AirportDetailPage() {
           </div>
         </div>
 
-        {/* 데이터 소스 정보 */}
-        {data.data_source && (
-          <div className="mt-4 pt-4 border-t border-slate-200">
-            <div className="flex flex-wrap gap-2">
-              <span className="text-xs text-slate-500">{t('detail.dataSource')}:</span>
-              <span className={`text-xs px-2 py-0.5 rounded ${
-                data.data_source.weather === '실제 데이터'
-                  ? 'bg-green-100 text-green-700'
-                  : 'bg-yellow-100 text-yellow-700'
-              }`}>
-                {t('detail.dataSourceWeather', { value: data.data_source.weather })}
-              </span>
-              <span className="text-xs px-2 py-0.5 rounded bg-yellow-100 text-yellow-700">
-                {t('detail.dataSourceOthers', { value: data.data_source.others })}
-              </span>
-            </div>
+        {/* 데이터 신뢰도 범례 */}
+        <div className="mt-4 pt-4 border-t border-slate-200">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-slate-500">{t('detail.dataConfidence')}:</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+              {t('detail.estimate')}
+            </span>
+            <span className="text-xs text-slate-400">{t('detail.estimateHint')}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">
+              {t('detail.noData')}
+            </span>
+            <span className="text-xs text-slate-400">{t('detail.noDataHint')}</span>
           </div>
-        )}
+        </div>
       </div>
 
       {/* 카테고리 차트 */}
@@ -147,9 +143,11 @@ export default function AirportDetailPage() {
       {/* 카테고리별 상세 점수 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {(Object.entries(data.categories) as [CategoryCode, typeof data.categories[CategoryCode]][]).map(
-          ([code, category]) => (
-            <div key={code} className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center justify-between mb-4">
+          ([code, category]) => {
+            const noData = category.has_data === false;
+            return (
+            <div key={code} className={`bg-white rounded-lg shadow p-6 ${noData ? 'opacity-70' : ''}`}>
+              <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center space-x-2">
                   <span className="text-2xl">{categoryIcons[code]}</span>
                   <div>
@@ -157,19 +155,37 @@ export default function AirportDetailPage() {
                     <p className="text-xs text-slate-500">{t(`categoryDesc.${code}` as const)}</p>
                   </div>
                 </div>
-                <RiskBadge level={category.level} size="sm" />
+                <div className="flex flex-col items-end space-y-1">
+                  <RiskBadge level={category.level} size="sm" />
+                  {noData && (
+                    <span
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 whitespace-nowrap"
+                      title={t('detail.noDataHint')}
+                    >
+                      {t('detail.noData')}
+                    </span>
+                  )}
+                  {category.is_proxy && (
+                    <span
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 whitespace-nowrap"
+                      title={t('detail.estimateHint')}
+                    >
+                      {t('detail.estimate')}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* 점수 바 */}
               <div className="mb-4">
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-slate-500">{t('detail.riskLevel')}</span>
-                  <span className="font-bold text-lg">{category.score.toFixed(1)}</span>
+                  <span className="font-bold text-lg">{noData ? '—' : category.score.toFixed(1)}</span>
                 </div>
                 <div className="h-3 bg-slate-200 rounded-full overflow-hidden">
                   <div
-                    className={`h-full ${categoryColors[code]} transition-all duration-500`}
-                    style={{ width: `${Math.min(category.score, 100)}%` }}
+                    className={`h-full ${noData ? 'bg-slate-300' : categoryColors[code]} transition-all duration-500`}
+                    style={{ width: `${noData ? 0 : Math.min(category.score, 100)}%` }}
                   />
                 </div>
               </div>
@@ -177,27 +193,32 @@ export default function AirportDetailPage() {
               {/* 세부 요인 */}
               <div className="space-y-2 pt-3 border-t border-slate-100">
                 <div className="text-xs font-medium text-slate-500 uppercase">{t('detail.subFactors')}</div>
-                {Object.entries(category.factors).map(([factor, value]) => (
-                  <div key={factor} className="flex justify-between items-center">
-                    <span className="text-sm text-slate-600">
-                      {t(`factors.${factor}` as const, { defaultValue: factor })}
-                    </span>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-20 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-slate-400"
-                          style={{ width: `${Math.min(value, 100)}%` }}
-                        />
-                      </div>
-                      <span className="text-sm font-medium text-slate-700 w-12 text-right">
-                        {typeof value === 'number' ? value.toFixed(1) : value}
+                {Object.keys(category.factors).length === 0 ? (
+                  <div className="text-sm text-slate-400">{t('detail.noDataHint')}</div>
+                ) : (
+                  Object.entries(category.factors).map(([factor, value]) => (
+                    <div key={factor} className="flex justify-between items-center">
+                      <span className="text-sm text-slate-600">
+                        {t(`factors.${factor}` as const, { defaultValue: factor })}
                       </span>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-20 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-slate-400"
+                            style={{ width: `${Math.min(value, 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-sm font-medium text-slate-700 w-12 text-right">
+                          {typeof value === 'number' ? value.toFixed(1) : value}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
-          )
+            );
+          }
         )}
       </div>
 

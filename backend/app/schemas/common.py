@@ -58,14 +58,20 @@ class CategoryScoreSchema(BaseModel):
     score: float
     level: str
     factors: Dict[str, float]
+    # 데이터 신뢰도 플래그
+    has_data: bool = True   # False = 유효 데이터 없음(가중치에서 제외됨)
+    is_proxy: bool = False  # True = 뉴스 신호 기반 추정치(실측 아님)
 
 
 class DataSourceMap(BaseModel):
-    weather: str
-    travel_advisory: str
-    health: str
-    operational: str
-    aviation: str
+    # 카테고리별 데이터 신뢰도 라벨. 엔드포인트마다 키 구성이 다를 수 있어
+    # (대시보드: travel_advisory / 상세: external) 모두 선택적으로 둔다.
+    weather: Optional[str] = None
+    travel_advisory: Optional[str] = None
+    external: Optional[str] = None
+    health: Optional[str] = None
+    operational: Optional[str] = None
+    aviation: Optional[str] = None
     security: Optional[str] = None
 
     model_config = {"extra": "allow"}
