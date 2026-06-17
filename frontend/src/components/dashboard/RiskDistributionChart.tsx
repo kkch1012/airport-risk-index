@@ -36,7 +36,8 @@ export default function RiskDistributionChart({ data }: RiskDistributionChartPro
               outerRadius={80}
               paddingAngle={5}
               dataKey="value"
-              label={({ name, value }) => `${name}: ${value}`}
+              // 0개 항목은 라벨을 그리지 않음(겹침 방지)
+              label={({ name, value }) => (value > 0 ? `${name}: ${value}` : '')}
               labelLine={false}
             >
               {chartData.map((entry, index) => (
